@@ -1,6 +1,6 @@
 Corpus Study — Plan
 
-Pre-registered before collection. Governed by CORPUS_STUDY_RULES.md; rule IDs below refer to that file.
+Pre-registered before collection. Governed by corpus-study-rules.md; rule IDs below refer to that file.
 
 Anything added to this document after the first collection run is recorded in §10 and labeled exploratory wherever it appears (S-8).
 
