@@ -17,6 +17,9 @@ out/
 # prisma
 packages/db/src/generated/
 
+# raw corpus (C-9): collected files are never committed
+study/corpus/
+
 # logs
 *.log
 npm-debug.log*

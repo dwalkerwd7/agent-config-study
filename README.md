@@ -5,7 +5,8 @@ repositories and reports when it changes.
 
 **Status: scaffold only.** The monorepo, services and build pipeline described under
 [Install](#install) work today. None of the scanning, inventory or drift behaviour below is
-implemented yet. See [Status](#status).
+implemented yet, and whether it gets built at all depends on the
+[corpus study](#corpus-study). See [Status](#status).
 
 ## The problem
 
@@ -16,7 +17,7 @@ pull request and nobody tracks them across an organization.
 
 ## What it does
 
-Three layers, in the order they are being built:
+Three layers:
 
 1. **Static checks.** Reads each config file and reports hardcoded secrets, package and image
    references with no version pin, plaintext `http://` endpoints, and `docker` invocations that
@@ -124,6 +125,33 @@ Not built yet:
 
 The Prisma schema currently holds only the Auth.js tables; the inventory, findings and drift
 models are not designed yet.
+
+## Corpus study
+
+Whether driftwood gets built at all depends on a study of agent configuration in public
+repositories, pre-registered before any data was collected.
+
+The study exists to test the premise above. If committed agent config turns out to be rare,
+already pinned, or actively maintained, there is nothing worth inventorying and the answer is
+no. The criteria were fixed in advance so the result cannot be reinterpreted afterwards: a gate
+on how many config files exist at all, then at least three of five signals — servers per config,
+unpinned reference rate, credential-shaped values, cross-client divergence, staleness — landing
+on the build side. A secondary purpose is to produce sanitized test fixtures and a severity
+rubric grounded in what actually appears in the wild, rather than in what seems alarming.
+
+- [study-plan.md](study-plan.md) — population, collection method, the locked questions Q1–Q14,
+  the decision criteria, and the priors recorded in advance to check calibration against
+- [corpus-study-rules.md](corpus-study-rules.md) — what may and may not be published, redaction
+  at collection, and disclosure handling
+- [corpus-study-results.md](corpus-study-results.md) — findings and the recorded decision, once
+  the study has run
+
+**Status: not started.** No data has been collected and there are no findings. Any figure that
+reaches this README will state N and its collection date, be scoped to the corpus rather than
+projected onto GitHub as a whole, and trace to analysis output instead of being typed by hand.
+
+The raw corpus is never committed — it stays in `study/corpus/`, which is gitignored. Analysis
+output goes to `study/output/`, which is committed so that published numbers have a source.
 
 ## License
 
