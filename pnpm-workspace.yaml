@@ -1,0 +1,24 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# The prisma CLI pulls in @prisma/studio-core, which depends on its own React
+# and @types/react versions. Left alone, pnpm installs several copies and forks
+# the peer hash of @prisma/client, so the generated client and the one Next
+# imports end up being different instances.
+overrides:
+  react: ^19.3.0
+  react-dom: ^19.3.0
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+
+# Dependencies permitted to run install scripts.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
