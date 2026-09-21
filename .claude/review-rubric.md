@@ -3,9 +3,11 @@
 Project rules for the `code-reviewer` agent, layered on top of its generic
 dimensions. Where this file and the generic rules disagree, this file wins.
 
-There is no CI, no eslint, and `pnpm lint` is `prettier --check` — formatting,
-not analysis. **Review is the only gate this repo has.** Nothing else will catch
-a mistake before it lands.
+CI runs `.claude/scripts/verify.sh`: prettier, type-aware eslint
+(`recommendedTypeChecked`), `tsc`, vitest, semgrep and gitleaks, plus a
+dependency audit and workflow lint. Do not report what those already fail on.
+They check syntax and known patterns, not intent — the rules below are the part
+only review catches.
 
 The repo is a scaffold: roughly 530 lines of handwritten source, and whether the
 product gets built at all is gated on the corpus study. Judge changes against
