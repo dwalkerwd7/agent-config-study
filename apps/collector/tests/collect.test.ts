@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sha256 } from '@driftwood/core';
+import { sha256 } from '@driftmark/core';
 import { RequestError } from 'octokit';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { collect, type CollectOptions } from '../src/collect.js';

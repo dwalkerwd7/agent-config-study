@@ -1,5 +1,5 @@
 {
-  "name": "@driftwood/collector",
+  "name": "@driftmark/collector",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@driftwood/core": "workspace:*",
+    "@driftmark/core": "workspace:*",
     "octokit": "^5.0.5",
     "pino": "^10.3.1",
     "zod": "^4.6.5"

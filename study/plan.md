@@ -10,7 +10,7 @@ Status: draft v1 · locked on: (date of first run) · owner: Derek Walker
 
 Two purposes, in priority order.
 
-1. Decide whether to build driftwood. If committed agent configuration is rare, clean, or static, the product has no basis and the decision is no.
+1. Decide whether to build driftmark. If committed agent configuration is rare, clean, or static, the product has no basis and the decision is no.
 2. Produce test fixtures and an evidence-based severity rubric. Frequency data tells me which checks are worth writing.
 
 A publishable write-up is a byproduct, not a goal. If the data is boring, the correct output is a short honest note and a decision not to build.

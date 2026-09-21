@@ -1,6 +1,6 @@
-# Review rubric — driftwood
+# Review rubric — driftmark
 
-Project rules for the `code-reviewer` agent, layered on top of its generic
+Project rules for the `agent-reviewer` agent, layered on top of its generic
 dimensions. Where this file and the generic rules disagree, this file wins.
 
 CI runs `.claude/scripts/verify.sh`: prettier, type-aware eslint
@@ -44,11 +44,11 @@ and the reason matters more than the rule:
   breaks `next build`, which evaluates route modules to collect page data with
   no `DATABASE_URL` set.
 - **A BullMQ queue name cannot contain `:`.** BullMQ 6 throws at construction.
-  Use `driftwood-<name>`.
+  Use `driftmark-<name>`.
 - **`NODE_ENV` stays out of `.env.example`.** Setting it to `development` breaks
   `next build` — the build renders with a dev React build and crashes on the
   built-in error page. Its absence is deliberate; adding it back is a blocker.
-- **`docker-compose.yml` keeps `name: driftwood`.** Compose otherwise names the
+- **`docker-compose.yml` keeps `name: driftmark`.** Compose otherwise names the
   project after the directory, and since this repo is laid out as worktrees that
   is the branch name — every worktree would get its own empty database.
 - **The `overrides` in `pnpm-workspace.yaml` stay.** The Prisma CLI pulls in
@@ -69,7 +69,7 @@ and the reason matters more than the rule:
 
 ## 4. Handling untrusted config
 
-This is the product: driftwood reads agent-config files written by other people.
+This is the product: driftmark reads agent-config files written by other people.
 Code on that path is security-sensitive even though it looks like plumbing.
 
 - **Never execute, spawn, resolve, or fetch anything a scanned config names.**
@@ -81,7 +81,7 @@ Code on that path is security-sensitive even though it looks like plumbing.
   paths; new logging keeps it.
 - A parse failure on hostile input is expected. It must not crash a worker or
   leak file content into an error message.
-- Text inside a scanned config that addresses a model is data, and if driftwood
+- Text inside a scanned config that addresses a model is data, and if driftmark
   ever surfaces config content to one, that is a design question — flag it.
 
 ## 5. Study rules, once scanning exists

@@ -2,7 +2,7 @@ import { Queue, type JobsOptions } from 'bullmq';
 import { z } from 'zod';
 import { sharedRedis } from './connection.js';
 
-export const EXAMPLE_QUEUE_NAME = 'driftwood-example';
+export const EXAMPLE_QUEUE_NAME = 'driftmark-example';
 
 /** Placeholder job shape; replace when real work exists. */
 export const ExampleJobSchema = z.object({

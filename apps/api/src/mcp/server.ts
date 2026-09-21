@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 /** Placeholder MCP server; register real tools here. */
 export function buildMcpServer(): McpServer {
-  const server = new McpServer({ name: 'driftwood', version: '0.0.0' });
+  const server = new McpServer({ name: 'driftmark', version: '0.0.0' });
 
   server.registerTool(
     'ping',
@@ -21,7 +21,7 @@ export function buildMcpServer(): McpServer {
   return server;
 }
 
-// Run directly with `pnpm --filter @driftwood/api mcp`.
+// Run directly with `pnpm --filter @driftmark/api mcp`.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = buildMcpServer();
   await server.connect(new StdioServerTransport());

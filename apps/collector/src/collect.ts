@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { sha256 } from '@driftwood/core';
+import { sha256 } from '@driftmark/core';
 import type { Logger } from 'pino';
 import {
   SEARCH_PAGE_SIZE,
