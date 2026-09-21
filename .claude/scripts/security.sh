@@ -55,7 +55,8 @@ fetch_tool() {
     echo "security: fetching $name $version" >&2
     mkdir -p "$dir" || return 1
     local tgz="$dir/$name.tar.gz"
-    curl -fsSL "$url" -o "$tgz" || return 1
+    # GitHub's release CDN returns the odd 502/504; retry rather than fail CI.
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 "$url" -o "$tgz" || return 1
     echo "$sha  $tgz" | sha256sum -c --quiet - >&2 || { rm -f "$tgz"; echo "security: $name checksum mismatch" >&2; return 1; }
     tar -xzf "$tgz" -C "$dir" "$name" && rm -f "$tgz" || return 1
   fi
