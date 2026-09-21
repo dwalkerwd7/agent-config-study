@@ -8,6 +8,11 @@ updates:
     # be rejected by the install anyway.
     cooldown:
       default-days: 7
+    ignore:
+      # @types/node tracks the Node version the code runs on, not the newest
+      # release. Move its major deliberately, with engines and CI's node-version.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       minor-and-patch:
         update-types: [minor, patch]
