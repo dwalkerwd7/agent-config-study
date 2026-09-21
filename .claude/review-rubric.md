@@ -1,6 +1,6 @@
 # Review rubric — driftmark
 
-Project rules for the `code-reviewer` agent, layered on top of its generic
+Project rules for the `agent-reviewer` agent, layered on top of its generic
 dimensions. Where this file and the generic rules disagree, this file wins.
 
 CI runs `.claude/scripts/verify.sh`: prettier, type-aware eslint

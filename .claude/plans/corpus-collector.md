@@ -86,4 +86,4 @@ These follow the pattern in `packages/core/tests/core.test.ts` and assert return
 3. `pnpm collect --max-repos 5`. Inspect the `study/corpus/` JSONL and files, and confirm provenance fields are present. Run `grep -rE 'ghp_|github_pat_|AKIA|sk-ant-|xox[baprs]-' study/corpus/files`: every hit should be a `<REDACTED:…>` placeholder.
 4. Stop a run mid-expansion with Ctrl-C, check that `runs.jsonl` shows `partial`, then rerun. It should skip completed pages and repos without duplicating work.
 5. Check that `git status` shows nothing under `study/corpus/`.
-6. Have the `code-reviewer` agent review against `.claude/review-rubric.md`, especially §4 and §5.
+6. Have the `agent-reviewer` agent review against `.claude/review-rubric.md`, especially §4 and §5.
