@@ -17,6 +17,7 @@ import {
   CorpusReadError,
   CorpusRecordError,
   CorpusStore,
+  fileKey,
   type FileRecord,
   type RedactionRecord,
   type RepoRecord,
@@ -42,6 +43,8 @@ function response(sliceId: string, page: number): ResponseRecord {
     total_count: 412,
     incomplete_results: false,
     retrieved_at: '2026-09-01T00:01:00.000Z',
+    item_count: 100,
+    items: [{ repo: 'octo/demo', path: '.mcp.json' }],
   };
 }
 
@@ -259,6 +262,39 @@ describe('CorpusStore: resume readers', () => {
     } catch (err) {
       expect((err as Error).message).not.toContain('secret-looking-fragment');
     }
+  });
+
+  it('reads every recorded response back, queued items included', () => {
+    const store = new CorpusStore(root);
+    store.appendResponse(response('s1', 1));
+    store.appendResponse({ ...response('s1', 2), item_count: 3, items: [] });
+    appendFileSync(join(root, 'responses.jsonl'), '{"slice_id":"s1","page":3');
+    expect(store.responses()).toEqual([
+      response('s1', 1),
+      { ...response('s1', 2), item_count: 3, items: [] },
+    ]);
+  });
+
+  it('throws on a response whose queued items are malformed', () => {
+    mkdirSync(root);
+    writeFileSync(
+      join(root, 'responses.jsonl'),
+      `${JSON.stringify({ ...response('s1', 1), items: [{ repo: 'octo/demo' }] })}\n`,
+    );
+    expect(() => new CorpusStore(root).responses()).toThrow(CorpusReadError);
+  });
+
+  it('reads completed files keyed on repo, commit and path', () => {
+    const store = new CorpusStore(root);
+    expect(store.completedFiles()).toEqual(new Set());
+    store.appendFile(FILE);
+    store.appendFile({ ...FILE, path: 'CLAUDE.md', kind: 'instructions', client: 'claude-code' });
+    expect(store.completedFiles()).toEqual(
+      new Set([
+        fileKey('octo/demo', 'b'.repeat(40), '.cursor/mcp.json'),
+        fileKey('octo/demo', 'b'.repeat(40), 'CLAUDE.md'),
+      ]),
+    );
   });
 
   it('throws on a complete line missing the fields it keys on', () => {

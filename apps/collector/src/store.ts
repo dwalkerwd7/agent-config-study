@@ -38,6 +38,20 @@ export interface ResponseRecord {
   total_count: number;
   incomplete_results: boolean;
   retrieved_at: string;
+  /** Items on the page, forks included. A page shorter than a full one is its slice's last. */
+  item_count: number;
+  /**
+   * The hits that were queued for expansion: public, non-fork repositories
+   * only (C-6, P-14), with the path each one matched. A resumed run rebuilds
+   * its queue from these, since it skips the pages that produced them.
+   */
+  items: SearchHit[];
+}
+
+/** One queued code-search hit. Both fields are API metadata, never file content. */
+export interface SearchHit {
+  repo: string;
+  path: string;
 }
 
 /** A fully expanded repository. Written last, so its presence means done. */
@@ -45,7 +59,8 @@ export interface RepoRecord {
   full_name: string;
   owner: string;
   stars: number;
-  pushed_at: string;
+  /** `null` when GitHub reports none, as `RepoMetadata` passes it through. */
+  pushed_at: string | null;
   default_branch: string;
   head_commit: string;
   tree_truncated: boolean;
@@ -155,6 +170,8 @@ export class CorpusStore {
       total_count: record.total_count,
       incomplete_results: record.incomplete_results,
       retrieved_at: record.retrieved_at,
+      item_count: record.item_count,
+      items: record.items.map((item) => ({ repo: item.repo, path: item.path })),
     });
   }
 
@@ -231,6 +248,67 @@ export class CorpusStore {
         throw new CorpusReadError('responses', line);
       }
       done.add(`${slice}:${String(page)}`);
+    }
+    return done;
+  }
+
+  /** Every search page already recorded, in the order it was written. */
+  responses(): ResponseRecord[] {
+    return this.#read('responses').map(([value, line]) => {
+      const sliceId = field(value, 'slice_id');
+      const query = field(value, 'query');
+      const page = field(value, 'page');
+      const totalCount = field(value, 'total_count');
+      const incomplete = field(value, 'incomplete_results');
+      const retrievedAt = field(value, 'retrieved_at');
+      const itemCount = field(value, 'item_count');
+      const items = field(value, 'items');
+      if (
+        typeof sliceId !== 'string' ||
+        typeof query !== 'string' ||
+        !isInteger(page) ||
+        !isInteger(totalCount) ||
+        typeof incomplete !== 'boolean' ||
+        typeof retrievedAt !== 'string' ||
+        !isInteger(itemCount) ||
+        !Array.isArray(items)
+      ) {
+        throw new CorpusReadError('responses', line);
+      }
+      return {
+        slice_id: sliceId,
+        query,
+        page,
+        total_count: totalCount,
+        incomplete_results: incomplete,
+        retrieved_at: retrievedAt,
+        item_count: itemCount,
+        items: items.map((item: unknown): SearchHit => {
+          const repo = field(item, 'repo');
+          const path = field(item, 'path');
+          if (typeof repo !== 'string' || typeof path !== 'string') {
+            throw new CorpusReadError('responses', line);
+          }
+          return { repo, path };
+        }),
+      };
+    });
+  }
+
+  /**
+   * `"repo@commit_sha:path"` for every file record already written, so a run
+   * resumed inside a repository does not record a file twice.
+   */
+  completedFiles(): Set<string> {
+    const done = new Set<string>();
+    for (const [value, line] of this.#read('files')) {
+      const repo = field(value, 'repo');
+      const commit = field(value, 'commit_sha');
+      const path = field(value, 'path');
+      if (typeof repo !== 'string' || typeof commit !== 'string' || typeof path !== 'string') {
+        throw new CorpusReadError('files', line);
+      }
+      done.add(fileKey(repo, commit, path));
     }
     return done;
   }
@@ -349,6 +427,11 @@ export class CorpusStore {
   }
 }
 
+/** The key `completedFiles()` returns for one file at one commit. */
+export function fileKey(repo: string, commitSha: string, path: string): string {
+  return `${repo}@${commitSha}:${path}`;
+}
+
 function isInside(root: string, path: string): boolean {
   const rel = relative(root, path);
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
@@ -361,6 +444,10 @@ function readIfExists(path: string): Buffer | null {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw err;
   }
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value);
 }
 
 function field(value: unknown, key: string): unknown {
