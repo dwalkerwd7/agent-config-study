@@ -135,27 +135,34 @@ export function createPacer(
   };
 }
 
-/**
- * The collector's Octokit: auth, plus the bundled throttling and retry plugins
- * with logging handlers. `fetch` replaces the HTTP layer; only tests pass it.
- */
-export function createOctokit(
-  token: string,
-  logger: Logger,
-  fetch?: typeof globalThis.fetch,
-): Octokit {
-  return new Octokit({
-    auth: token,
-    throttle: limitHandlers(logger),
-    ...(fetch === undefined ? {} : { request: { fetch } }),
-  });
+export interface CollectorGitHubOptions {
+  token: string;
+  logger: Logger;
+  /** Replaces the HTTP layer under the plugins. Only tests pass it. */
+  fetch?: typeof globalThis.fetch;
+  /** Awaited before each code search. Defaults to 10 a minute; tests pass a no-op. */
+  paceSearch?: () => Promise<void>;
 }
 
-export class OctokitCollectorGitHub implements CollectorGitHub {
+/**
+ * The production client: Octokit with auth and the bundled throttling and
+ * retry plugins, whose limit handlers log and retry, and code search paced to
+ * 10 requests a minute.
+ */
+export function createCollectorGitHub(options: CollectorGitHubOptions): CollectorGitHub {
+  const octokit = new Octokit({
+    auth: options.token,
+    throttle: limitHandlers(options.logger),
+    ...(options.fetch === undefined ? {} : { request: { fetch: options.fetch } }),
+  });
+  return new OctokitCollectorGitHub(octokit, options.paceSearch ?? createPacer(SEARCH_INTERVAL_MS));
+}
+
+class OctokitCollectorGitHub implements CollectorGitHub {
   readonly #octokit: Octokit;
   readonly #paceSearch: () => Promise<void>;
 
-  constructor(octokit: Octokit, paceSearch: () => Promise<void> = createPacer(SEARCH_INTERVAL_MS)) {
+  constructor(octokit: Octokit, paceSearch: () => Promise<void>) {
     this.#octokit = octokit;
     this.#paceSearch = paceSearch;
   }
@@ -239,9 +246,4 @@ export class OctokitCollectorGitHub implements CollectorGitHub {
       committed_at: commit.commit.committer?.date ?? commit.commit.author?.date ?? null,
     };
   }
-}
-
-/** The production client: the collector's Octokit, with code search paced to 10 a minute. */
-export function createCollectorGitHub(token: string, logger: Logger): CollectorGitHub {
-  return new OctokitCollectorGitHub(createOctokit(token, logger));
 }
