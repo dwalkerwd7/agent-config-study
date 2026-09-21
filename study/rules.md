@@ -61,7 +61,7 @@ Status: draft v1 · owner: Derek Walker
 - **S-5** No claim that a finding constitutes an attack, a breach, or exploitation. Permitted framing: what was present in the file.
 - **S-6** No projection to dollar impact, breach likelihood, or affected user counts.
 - **S-7** Findings from documentation-class files (C-5) are reported separately and never combined into a config-class statistic.
-- **S-8** Questions and metrics are recorded in study-plan.md before collection begins. Any metric added after looking at the data is labeled exploratory in every artifact it appears in.
+- **S-8** Questions and metrics are recorded in study/plan.md before collection begins. Any metric added after looking at the data is labeled exploratory in every artifact it appears in.
 - **S-9** Where a competing explanation for a result is plausible, it is stated. Absence of counter-explanation is not evidence.
 
 ## 5. Disclosure rules (D)

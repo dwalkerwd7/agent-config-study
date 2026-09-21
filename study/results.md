@@ -1,6 +1,6 @@
 Corpus Study — Results
 
-Findings from the study pre-registered in study-plan.md, governed by corpus-study-rules.md.
+Findings from the study pre-registered in study/plan.md, governed by study/rules.md.
 Question IDs (Q1–Q14) and rule IDs refer to those files.
 
 Status: not yet run · no data collected · owner: Derek Walker
@@ -36,7 +36,7 @@ sample. No figure here extrapolates beyond the corpus (S-1).
 
 ## 3. Decision
 
-Recorded against the criteria fixed in study-plan.md §2, which were written before
+Recorded against the criteria fixed in study/plan.md §2, which were written before
 collection so the result cannot be reinterpreted.
 
 | Signal                                   | Build   | Don't build | Observed  | Side      |
@@ -89,7 +89,7 @@ Deduplicated figures are the headline; raw shown alongside and labeled (S-4).
 
 ## 5. Falsification check
 
-The four outcomes from study-plan.md §8 that would sink the premise. Any two and the
+The four outcomes from study/plan.md §8 that would sink the premise. Any two and the
 answer is no.
 
 | Outcome                                         | Holds?    |
@@ -101,7 +101,7 @@ answer is no.
 
 ## 6. Calibration
 
-Priors were recorded in study-plan.md §3 before collection, so a result that merely
+Priors were recorded in study/plan.md §3 before collection, so a result that merely
 matches expectation is not mistaken for a discovery.
 
 | Prior                           | Predicted | Observed  |
@@ -130,7 +130,7 @@ repository, never added by copy-paste from the raw corpus (A-5).
 ## 9. Exploratory additions
 
 Anything computed after looking at the data, labeled exploratory wherever it appears (S-8).
-Post-hoc questions are recorded in study-plan.md §10 first.
+Post-hoc questions are recorded in study/plan.md §10 first.
 
 (none yet)
 

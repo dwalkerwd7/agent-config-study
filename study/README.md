@@ -1,7 +1,7 @@
 # study
 
 Working directories for the corpus study. The write-up lives in
-[corpus-study-results.md](../corpus-study-results.md).
+[results.md](results.md).
 
 | Path      | Contents                                                        |
 | --------- | --------------------------------------------------------------- |

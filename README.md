@@ -139,11 +139,11 @@ unpinned reference rate, credential-shaped values, cross-client divergence, stal
 on the build side. A secondary purpose is to produce sanitized test fixtures and a severity
 rubric grounded in what actually appears in the wild, rather than in what seems alarming.
 
-- [study-plan.md](study-plan.md) — population, collection method, the locked questions Q1–Q14,
+- [study/plan.md](study/plan.md) — population, collection method, the locked questions Q1–Q14,
   the decision criteria, and the priors recorded in advance to check calibration against
-- [corpus-study-rules.md](corpus-study-rules.md) — what may and may not be published, redaction
+- [study/rules.md](study/rules.md) — what may and may not be published, redaction
   at collection, and disclosure handling
-- [corpus-study-results.md](corpus-study-results.md) — findings and the recorded decision, once
+- [study/results.md](study/results.md) — findings and the recorded decision, once
   the study has run
 
 **Status: not started.** No data has been collected and there are no findings. Any figure that
