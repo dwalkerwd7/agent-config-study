@@ -175,6 +175,31 @@ describe('CollectorGitHub.getRepo', () => {
   });
 });
 
+describe('CollectorGitHub.getHeadCommit', () => {
+  it("maps the branch's head commit sha and its tree sha", async () => {
+    const { github, calls } = client([
+      {
+        body: {
+          name: 'trunk',
+          commit: {
+            sha: 'ffff6666',
+            commit: {
+              message: 'update',
+              tree: { sha: 'tree0000', url: 'https://api.github.test/x' },
+            },
+          },
+          protected: false,
+        },
+      },
+    ]);
+    expect(await github.getHeadCommit('octo', 'demo', 'trunk')).toEqual({
+      sha: 'ffff6666',
+      tree_sha: 'tree0000',
+    });
+    expect(calls[0]?.url.pathname).toBe('/repos/octo/demo/branches/trunk');
+  });
+});
+
 describe('CollectorGitHub.getTree', () => {
   it('requests the tree recursively and maps entries and truncated', async () => {
     const { github, calls } = client([

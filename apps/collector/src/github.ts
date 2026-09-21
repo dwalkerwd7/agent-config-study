@@ -1,4 +1,4 @@
-import { Octokit } from 'octokit';
+import { Octokit, RequestError } from 'octokit';
 import type { Logger } from 'pino';
 
 /**
@@ -64,15 +64,36 @@ export interface LastCommit {
   committed_at: string | null;
 }
 
+/** A branch's head commit and that commit's root tree. */
+export interface HeadCommit {
+  sha: string;
+  tree_sha: string;
+}
+
 export interface CollectorGitHub {
   searchCode(q: string, page: number): Promise<CodeSearchPage>;
   getRepo(owner: string, repo: string): Promise<RepoMetadata>;
+  /**
+   * The commit at the head of `branch`, with its tree. The collect loop reads
+   * the tree by this commit's `tree_sha`, so the files it collects and the
+   * commit it records for them are the same snapshot (C-3).
+   */
+  getHeadCommit(owner: string, repo: string, branch: string): Promise<HeadCommit>;
   /** The recursive tree at `sha`. */
   getTree(owner: string, repo: string, sha: string): Promise<Tree>;
   /** The blob's decoded bytes. */
   getBlob(owner: string, repo: string, sha: string): Promise<Buffer>;
   /** The most recent commit touching `path` on the default branch, or `null` when there is none. */
   lastCommitForPath(owner: string, repo: string, path: string): Promise<LastCommit | null>;
+}
+
+/**
+ * The HTTP status of a failed GitHub request, or `null` when `err` is not one
+ * (a disk error, a bug). The collect loop skips a repository on the first kind
+ * and stops on the second.
+ */
+export function apiErrorStatus(err: unknown): number | null {
+  return err instanceof RequestError ? err.status : null;
 }
 
 /** Code search allows 10 requests per minute for an authenticated user. */
@@ -201,6 +222,11 @@ class OctokitCollectorGitHub implements CollectorGitHub {
       private: data.private,
       archived: data.archived,
     };
+  }
+
+  async getHeadCommit(owner: string, repo: string, branch: string): Promise<HeadCommit> {
+    const { data } = await this.#octokit.rest.repos.getBranch({ owner, repo, branch });
+    return { sha: data.commit.sha, tree_sha: data.commit.commit.tree.sha };
   }
 
   async getTree(owner: string, repo: string, sha: string): Promise<Tree> {
