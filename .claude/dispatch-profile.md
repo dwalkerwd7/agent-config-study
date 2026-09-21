@@ -31,23 +31,6 @@ When the picker reports the queue empty (exit 3) because the remaining issues
 are `Blocked by` an unmerged PR, stop and report which PRs are waiting on the
 owner. Do not wait for a merge that isn't yours to make.
 
-## Escalation
-
-The builder's default: comment on the issue, add `needs-human`, remove
-`agent-build`. On an escalation, **stop draining** and report the reason
-verbatim. Queues here are dependency-ordered with `Blocked by #N`, so the next
-item may rest on the one that failed.
-
-## Verify gate
-
-`bash .claude/scripts/verify.sh`. CI runs the same script, so a green local run
-is a green `verify` check.
-
-It derives its gates from the diff against `origin/main` **including uncommitted
-and untracked files**, so it is correct before a commit. A docs-only change
-(`*.md`, `study/`, `.claude/`) runs prettier and gitleaks only; anything else
-also runs eslint (type-aware), `tsc`, vitest and semgrep.
-
 ## Narrow inner loop (tell every builder this)
 
 The full gate takes about a minute. That's cheap, but semgrep dominates it, so
@@ -89,9 +72,3 @@ and run `verify.sh` before review, once per review round, and at PR time.
 and make no GitHub API calls from code or tests. The first real run locks the
 study plan, so the owner does it by hand. Each collector issue repeats this in
 its ground rules.
-
-## Worktrees
-
-Created only by `dispatch-prepare.sh`, which calls
-`.claude/scripts/worktree-add.sh`. Worktrees live beside `main/` in the
-bare-repo container. **Never run `worktree-prune.sh` during a drain.**
