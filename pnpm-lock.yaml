@@ -86,7 +86,7 @@ importers:
 
   apps/collector:
     dependencies:
-      '@driftwood/core':
+      '@driftmark/core':
         specifier: workspace:*
         version: link:../../packages/core
       octokit:

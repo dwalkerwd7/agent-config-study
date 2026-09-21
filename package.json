@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "lint": "prettier --check .",
     "lint:code": "eslint .",
-    "collect": "pnpm --filter @driftwood/collector collect",
+    "collect": "pnpm --filter @driftmark/collector collect",
     "format": "prettier --write .",
     "db:generate": "pnpm --filter @driftmark/db generate",
     "db:migrate": "pnpm --filter @driftmark/db migrate",
