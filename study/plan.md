@@ -66,7 +66,7 @@ Config-class:
 - `.cursor/rules/**`
 - `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`
 
-Documentation-class: fenced JSON blocks in README.md containing mcpServers or servers. Collected, classified separately, never merged (C-5, S-7).
+Documentation-class: fenced JSON blocks in README.md containing mcpServers or servers. Classified separately and never merged with config-class (C-5, S-7). The collector as built does not collect them; it searches and collects the config-class paths above only (see Query strategy).
 
 ### Query strategy
 
