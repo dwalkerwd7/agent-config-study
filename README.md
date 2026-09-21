@@ -113,6 +113,9 @@ API with health and readiness checks, a BullMQ queue and worker, a Prisma schema
 Auth.js tables, GitHub OAuth sign-in in the Next.js app, an MCP server with a placeholder tool,
 and parsing and hashing helpers in `packages/core`.
 
+The corpus collector exists as code in `apps/collector`, but it has not been run and no data
+has been collected yet.
+
 Not built yet:
 
 - The GitHub App itself — manifest, installation flow, webhook receiver and signature check.
