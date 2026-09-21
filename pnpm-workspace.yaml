@@ -11,6 +11,11 @@ overrides:
   react-dom: ^19.3.0
   '@types/react': ^19.3.0
   '@types/react-dom': ^19.3.0
+  # Security floors for transitive deps of the prisma CLI (pnpm audit, high).
+  # Postgres-only project, so mysql2 is never loaded, but the audit gate
+  # cannot know that. Drop these once prisma ships the fixed versions itself.
+  deepmerge-ts: ^8.0.2
+  mysql2: ^3.23.1
 
 # Dependencies permitted to run install scripts.
 allowBuilds:
@@ -22,3 +27,29 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   workerd: true
+
+# Supply-chain hardening (flagged by the semgrep SAST job).
+# Wait a week before installing a newly published version: most malicious
+# releases are caught and yanked within days.
+minimumReleaseAge: 10080
+# dotenv 18 was adopted before this policy existed, and the only mature
+# alternative is a major downgrade. Harmless to delete after 2026-09-25.
+minimumReleaseAgeExclude:
+  - dotenv@18.0.1
+# Refuse a version whose publish provenance is weaker than an earlier one's.
+trustPolicy: no-downgrade
+# prisma@7.10.0 is the only prisma release published without provenance;
+# 7.9.1 and the @prisma/* 7.10.0 siblings all carry it. Prisma reworked its
+# publish token just before this release, which fits a pipeline change, not a
+# takeover. Scoped to this exact version: the next unattested one still fails.
+#
+# The check orders releases by publish date, not semver, so a backport or a
+# prerelease line published after an attested release reads as a downgrade:
+#   semver@6.3.1 — a 2023 backport to 6.x, published after attested 7.5.2.
+#   next-auth@5.0.0-beta.32 — no v5 beta has ever carried provenance.
+trustPolicyExclude:
+  - prisma@7.10.0
+  - semver@6.3.1
+  - next-auth@5.0.0-beta.32
+# Transitive deps may only come from the registry, never git or tarball URLs.
+blockExoticSubdeps: true
