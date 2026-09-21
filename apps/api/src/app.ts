@@ -5,7 +5,9 @@ import { healthRoutes } from './routes/health.js';
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // pino's concrete Logger is structurally wider than FastifyBaseLogger;
-    // Fastify only uses the base surface.
+    // Fastify only uses the base surface. tsc needs this cast even though
+    // typescript-eslint's view of the types says it does not.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     loggerInstance: logger as FastifyBaseLogger,
     trustProxy: true,
   });

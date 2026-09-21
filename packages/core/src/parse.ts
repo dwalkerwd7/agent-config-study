@@ -44,7 +44,7 @@ export interface FrontmatterDoc {
 export function parseFrontmatter(text: string, source = '<input>'): FrontmatterDoc {
   try {
     const parsed = matter(text);
-    return { data: parsed.data as Record<string, unknown>, body: parsed.content };
+    return { data: parsed.data, body: parsed.content };
   } catch (cause) {
     throw new ParseFailure(cause instanceof Error ? cause.message : String(cause), source);
   }
