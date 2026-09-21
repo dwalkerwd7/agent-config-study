@@ -4,7 +4,7 @@
 #
 #   sast       semgrep over the whole tree, with the rulesets in SEMGREP_CONFIGS
 #   secrets    gitleaks over the commits since <base> plus the uncommitted and
-#              untracked files, or over the full history with --base ''
+#              untracked files, or over HEAD's full history with --base ''
 #   deps       pnpm or npm audit, failing on high or critical advisories
 #   workflows  actionlint + zizmor over .github/workflows
 #
@@ -82,7 +82,11 @@ run_secrets() {
     "$GITLEAKS_SHA256")" || return 1
 
   if [ -z "$base" ]; then
-    "$gitleaks" git --no-banner --redact . || return 1
+    # HEAD's history only. Plain `gitleaks git` scans every ref in the clone,
+    # and CI's full fetch includes other PRs' branches, so a fake fixture
+    # waiting in another PR (whose .gitleaksignore isn't here yet) would
+    # fail this one.
+    "$gitleaks" git --no-banner --redact --log-opts=HEAD . || return 1
     return 0
   fi
 

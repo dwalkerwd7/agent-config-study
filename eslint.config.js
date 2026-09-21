@@ -26,10 +26,10 @@ export default tseslint.config(
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        projectService: {
-          // Tests sit outside every package's `include`.
-          allowDefaultProject: ['packages/*/tests/*.ts', 'apps/*/tests/*.ts'],
-        },
+        // Every file belongs to a real tsconfig: each package's own, and a
+        // tests/tsconfig.json beside its tests. The default project is capped
+        // at 8 files, so leaning on it for tests broke once they outgrew it.
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },

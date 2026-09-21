@@ -66,20 +66,28 @@ Config-class:
 - `.cursor/rules/**`
 - `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`
 
-Documentation-class: fenced JSON blocks in README.md containing mcpServers or servers. Collected, classified separately, never merged (C-5, S-7).
+Documentation-class: fenced JSON blocks in README.md containing mcpServers or servers. Classified separately and never merged with config-class (C-5, S-7). The collector as built does not collect them; it searches and collects the config-class paths above only (see Query strategy).
 
 ### Query strategy
 
-Code search is capped at 10 requests/minute, 256-character queries, five boolean operators, and up to 4,000 repositories reached per query. One query therefore returns a relevance-ranked slice, never the population.
+This section describes the collector as built in `apps/collector`. It was rewritten after the collector was written and before any collection run; that is allowed without a §10 entry only because the plan is not locked until the first run, and any change after that goes to §10.
 
-Slices, run independently and unioned:
+Collection runs in two phases, discovery and expansion.
 
-- by `path:` — one query per target path
-- by `stars:` bands — 0..1, 2..10, 11..100, 101..1000, >1000
-- by `size:` bands, to break relevance ranking
-- by `pushed:` quarter, for 2025–2026
+**Discovery: code search sliced by target path × file-size band** (`apps/collector/src/queries.ts`). Each target path gets one search term plus `path:`/`filename:` qualifiers, and every target is crossed with every size band, one query per pair. The size bands, as defined in `SIZE_BANDS`, are `size:<1000`, `size:1000..4999`, `size:5000..19999` and `size:>=20000`; they exist to break relevance ranking into slices small enough to stay under the result cap, and the owner may revise them before the first run. `fork:` is left at its default, which excludes forks (C-6). A query that breaks code search's limits — 256 characters, five boolean operators — fails when the slices are built, before any request. Each slice is paged until it runs out or hits the cap (`apps/collector/src/collect.ts`), code search is paced to 10 requests a minute (`apps/collector/src/github.ts`), and every response is recorded with its slice, query and `incomplete_results` (C-3, C-4). Search hits from forks and private repositories are dropped; every other hit queues its repository.
 
-The stars bands are deliberate: comparing popular repos against the long tail is itself one of the questions (Q9).
+**Expansion: one tree call per repository** (`apps/collector/src/collect.ts`). Each queued repository gets one metadata call, one call for its default-branch head commit, and exactly one recursive tree call at that commit; each target file in the tree then gets its own blob fetch and last-commit lookup. Every target path in that tree is collected, whether or not a search hit named it, so search decides which repositories are reached and the tree decides which files are collected. Each file records the slices that surfaced it, and whether it came from a search hit or only from the tree.
+
+**Stars and recency are not search qualifiers.** No query carries `stars:` or `pushed:`. The collector records each repository's star count and `pushed_at` from its repository metadata during expansion, and the stars bands (0..1, 2..10, 11..100, 101..1000, >1000) and `pushed_at` bands (by quarter, 2025–2026) are assigned afterwards, at analysis, from those recorded fields. The stars bands are deliberate: comparing popular repos against the long tail is itself one of the questions (Q9). Because the bands are not sliced at search time, the corpus's mix across them follows whatever search surfaced rather than a quota per band.
+
+Discovery covers the config-class target paths only. No slice searches README files, so documentation-class blocks are not collected by this collector.
+
+Known biases, stated with every statistic derived from the corpus (S-3):
+
+- **The result cap.** Code search returns at most 1,000 results per query. A slice larger than that is cut off in relevance order, and what lies past the cap is never seen. Size-band slicing narrows this but does not remove it; a slice whose `total_count` exceeds what was paged is visible in the recorded responses.
+- **The search-term requirement.** Code search needs at least one search term, and without `in:` it matches that term against file content. Each target's term is the most neutral word its format always contains (`SEARCH_TERMS` in `queries.ts`), but a file without that word is not found by search. It is still collected if another hit reaches its repository, because expansion reads the whole tree.
+- **Default-branch-only indexing.** Code search indexes only default branches, and expansion reads only the default-branch head. Config on any other branch is invisible to both phases.
+- **Truncated trees.** A very large repository's recursive tree can come back truncated; the collector records `tree_truncated` for the repository, and target files beyond the cut are missed.
 
 ### Collector requirements
 
