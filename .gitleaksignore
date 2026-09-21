@@ -1,0 +1,27 @@
+# Fake credentials in the redactor's test fixtures (issue #7). Each value is
+# random characters in the provider's format, generated for the fixture file and
+# never issued by anyone; the redactor tests need values that look real to a
+# scanner. One entry per flagged line, as `file:rule:line`, so the entries hold
+# across commits (squash merges included). A real value anywhere else, or a new
+# line in this file, is still reported.
+
+# FAKE.github: ghp_ personal-access-token shape
+apps/collector/tests/credential-fixtures.ts:github-pat:7
+# FAKE.aws: AKIA access-key-id shape
+apps/collector/tests/credential-fixtures.ts:aws-access-token:8
+# FAKE.anthropic: sk-ant-api03- key shape
+apps/collector/tests/credential-fixtures.ts:anthropic-api-key:10
+# FAKE.openai: sk-proj- key shape
+apps/collector/tests/credential-fixtures.ts:openai-api-key:12
+# FAKE.slack: xoxb- bot-token shape
+apps/collector/tests/credential-fixtures.ts:slack-bot-token:13
+# FAKE.stripe: sk_live_ secret-key shape
+apps/collector/tests/credential-fixtures.ts:stripe-access-token:14
+# FAKE.google: AIza api-key shape
+apps/collector/tests/credential-fixtures.ts:gcp-api-key:15
+# FAKE.jwt: HS256 JWT with a random signature and a "fixture" subject
+apps/collector/tests/credential-fixtures.ts:jwt:16
+# FAKE.pem: PKCS#8 PEM block with a random base64 body
+apps/collector/tests/credential-fixtures.ts:private-key:18
+# FAKE.keyedLiteral: random 32-character value for the keyed-literal detector
+apps/collector/tests/credential-fixtures.ts:generic-api-key:25
