@@ -10,7 +10,7 @@ Decisions already made with you:
 - **Per-repo expansion:** search is used to _discover_ repos. One tree call per repo then collects _every_ target path in it, which Q10 and Q13 need.
 - **Config-class only in v1.** README documentation blocks come in a follow-up, still before the first run.
 
-Branching: this worktree is on `scratch/reviewer-test`, whose `apps/api/src/scan/collector.ts` is a reviewer test fixture with a hardcoded token and config-URL fetching. Work from a fresh `feat/corpus-collector` branch off `main` and reuse nothing from that file.
+The build is split into GitHub issues, one per module, each built on its own branch off `main`. `scratch/reviewer-test` has an `apps/api/src/scan/collector.ts` that is a reviewer test fixture, with a hardcoded token and config-URL fetching. Reuse nothing from it.
 
 ## App layout (`apps/collector/`)
 
