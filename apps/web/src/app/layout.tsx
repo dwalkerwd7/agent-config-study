@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'driftwood',
+  title: 'driftmark',
   description: 'Inventory and drift detection for AI coding-agent configuration.',
 };
 

@@ -5,7 +5,7 @@ export default async function Home() {
 
   return (
     <main>
-      <h1>driftwood</h1>
+      <h1>driftmark</h1>
       <p style={{ color: 'var(--muted)' }}>Scaffold is up. Nothing is built on it yet.</p>
 
       {session?.user ? (

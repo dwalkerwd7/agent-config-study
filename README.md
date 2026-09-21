@@ -1,4 +1,4 @@
-# driftwood
+# driftmark
 
 A GitHub App that inventories AI coding-agent configuration across an organization's
 repositories and reports when it changes.
@@ -27,7 +27,7 @@ Three layers:
 3. **Drift detection.** Compares each scan against a baseline you have approved and reports what
    was added, removed or modified since.
 
-driftwood reports and compares. It does not block merges, gate CI or prevent anything; a finding
+driftmark reports and compares. It does not block merges, gate CI or prevent anything; a finding
 is a thing to go look at, not an incident.
 
 ## What it checks
@@ -47,8 +47,8 @@ themselves accept. Markdown surfaces are split into YAML frontmatter and body.
 Requires Node 22+, pnpm 11+ and Docker.
 
 ```bash
-git clone git@github.com:dwalkerwd7/driftwood.git
-cd driftwood
+git clone git@github.com:dwalkerwd7/driftmark.git
+cd driftmark
 pnpm install
 
 cp .env.example .env          # then fill in GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
@@ -62,9 +62,9 @@ pnpm build
 Run the pieces:
 
 ```bash
-pnpm --filter @driftwood/api dev       # fastify api on :3001
-pnpm --filter @driftwood/api worker    # bullmq worker
-pnpm --filter @driftwood/web dev       # next.js app on :3000
+pnpm --filter @driftmark/api dev       # fastify api on :3001
+pnpm --filter @driftmark/api worker    # bullmq worker
+pnpm --filter @driftmark/web dev       # next.js app on :3000
 pnpm test
 ```
 
@@ -75,7 +75,7 @@ The GitHub OAuth callback URL is `http://localhost:3000/api/auth/callback/github
 Planned reporting format, not yet produced by the code:
 
 ```
-$ driftwood scan --org acme
+$ driftmark scan --org acme
 
 acme/payments-api
   .mcp.json                         3 servers
@@ -96,7 +96,7 @@ acme/marketing-site
 ```
 
 ```
-$ driftwood drift --org acme --since 7d
+$ driftmark drift --org acme --since 7d
 
 acme/payments-api   .mcp.json                       modified   a1b2c3d -> 9f8e7d6
                     + server "shell"  command: bash -c
@@ -120,7 +120,7 @@ Not built yet:
 - Repository walking and config-file discovery.
 - Every static check listed above.
 - Baseline approval and drift comparison.
-- Any user interface beyond a sign-in button, and the `driftwood` CLI shown above.
+- Any user interface beyond a sign-in button, and the `driftmark` CLI shown above.
 - Notifications of any kind.
 
 The Prisma schema currently holds only the Auth.js tables; the inventory, findings and drift
@@ -128,7 +128,7 @@ models are not designed yet.
 
 ## Corpus study
 
-Whether driftwood gets built at all depends on a study of agent configuration in public
+Whether driftmark gets built at all depends on a study of agent configuration in public
 repositories, pre-registered before any data was collected.
 
 The study exists to test the premise above. If committed agent config turns out to be rare,

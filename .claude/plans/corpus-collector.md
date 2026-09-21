@@ -2,7 +2,7 @@
 
 ## Context
 
-The build/no-build decision for driftwood depends on the corpus study (`study/plan.md`, governed by `study/rules.md`). Nothing has been collected yet. This plan covers the first piece: a standalone CLI app that finds public, non-fork repos with agent-config files through GitHub code search, fetches those files, redacts credential-shaped values before anything reaches disk, and writes them with provenance to `study/corpus/`, which is gitignored. Analysis comes later and is out of scope.
+The build/no-build decision for driftmark depends on the corpus study (`study/plan.md`, governed by `study/rules.md`). Nothing has been collected yet. This plan covers the first piece: a standalone CLI app that finds public, non-fork repos with agent-config files through GitHub code search, fetches those files, redacts credential-shaped values before anything reaches disk, and writes them with provenance to `study/corpus/`, which is gitignored. Analysis comes later and is out of scope.
 
 Decisions already made with you:
 
@@ -16,7 +16,7 @@ The build is split into GitHub issues, one per module, each built on its own bra
 
 Mirror `apps/api`'s package and tsconfig shape: NodeNext ESM, `.js` import suffixes, `import type`, bracketed `process.env['X']`. Its env and logger are **not** imported from `apps/api`, because `apps/api/src/env.ts` requires `DATABASE_URL`. Postgres is not used at all: C-9 keeps the raw corpus inside `study/corpus/`, and the rubric in §7 treats an unused Prisma model as a finding.
 
-- `package.json`: `@driftwood/collector`, private. Deps: `octokit`, `zod`, `pino`, with versions matching `apps/api`. Scripts: `collect` (`tsx src/cli.ts`), `build`/`typecheck` (`tsc -b`).
+- `package.json`: `@driftmark/collector`, private. Deps: `octokit`, `zod`, `pino`, with versions matching `apps/api`. Scripts: `collect` (`tsx src/cli.ts`), `build`/`typecheck` (`tsc -b`).
 - `tsconfig.json`: copy of `apps/api/tsconfig.json` without the project references.
 - `src/env.ts`: zod schema in the style of `apps/api/src/env.ts`. `GITHUB_TOKEN` is required; recommend a fine-grained PAT with public-repo read only, which makes P-14 structurally impossible. `CORPUS_SALT` is required, at least 32 chars, and never published (C-2, P-11). `LOG_LEVEL` is optional. The corpus directory is **not** configurable: it resolves to `<repo root>/study/corpus` (C-9).
 - `src/logger.ts`: pino. It logs counts, repo names, query ids and API status. It never logs file content or any value read out of a file. Errors on the file path are rethrown with a fixed message plus repo and path, and never with the content.
@@ -65,7 +65,7 @@ Mirror `apps/api`'s package and tsconfig shape: NodeNext ESM, `.js` import suffi
 
 ## Other edits
 
-- Root `package.json`: add a `"collect": "pnpm --filter @driftwood/collector collect"` script.
+- Root `package.json`: add a `"collect": "pnpm --filter @driftmark/collector collect"` script.
 - `.env.example`: add `CORPUS_SALT=""` with a comment to generate it with `openssl rand -hex 32` and never share it.
 - `study/plan.md` §5: rewrite the query strategy to match reality. Code search is sliced by path × size. Stars and pushed bands are assigned post hoc from repo metadata. Repos are expanded via tree. Note the 1,000-result cap, the search-term requirement and the default-branch-only indexing as known biases. This is allowed without §10 because the plan isn't locked until the first run.
 - `README.md` Status: one honest line saying a collector exists and no data has been collected yet.

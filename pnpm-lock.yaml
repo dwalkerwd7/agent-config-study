@@ -52,10 +52,10 @@ importers:
 
   apps/api:
     dependencies:
-      '@driftwood/core':
+      '@driftmark/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@driftwood/db':
+      '@driftmark/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@modelcontextprotocol/sdk':
@@ -89,7 +89,7 @@ importers:
       '@auth/prisma-adapter':
         specifier: ^2.11.3
         version: 2.11.3(@prisma/client@7.10.0(prisma@7.10.0(@types/node@24.13.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3))
-      '@driftwood/db':
+      '@driftmark/db':
         specifier: workspace:*
         version: link:../../packages/db
       next:
