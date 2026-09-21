@@ -4,18 +4,32 @@ Read by the machine-global `dispatcher` agent. It carries the conventions
 specific to this repo, so they hold no matter who writes the dispatcher's
 prompt, and nothing important lives only in one session's memory.
 
-## Merging is not authorized
+## Merging: authorized per issue, by the `agent-merge` label
 
-**Never run `gh pr merge` in any form, and never arm auto-merge.** Tell every
-builder the same. The owner reviews and merges every agent-built PR. This holds
-even though the repo has auto-merge enabled and `main` requires the `verify` and
-`security` checks. Those settings are for PRs the owner chooses to auto-merge,
-and grant nothing to an agent.
+**Merging is authorized only for an issue carrying the `agent-merge` label.**
+The owner applies it to low-risk issues. Everything else waits for the owner's
+review. The repo's auto-merge setting and required checks grant nothing on
+their own.
 
-An `open` PR waiting for review is a finished build. Record its verdict and
-continue with the next eligible issue. When the picker reports the queue empty
-(exit 3) because the remaining issues are `Blocked by` an unmerged PR, stop and
-report which PRs are waiting on the owner. Do not wait for merges.
+- **Agents never add or remove `agent-merge`**, on any issue. Builders never
+  merge; the dispatcher does it after verifying.
+- **Check the label right before arming,** on the issue, not at dispatch time,
+  because the owner may remove it while the build runs:
+  ```bash
+  gh api "repos/$repo/issues/<n>/labels" --jq '.[].name' | grep -qx agent-merge
+  ```
+- **When it is present:** after `dispatch-verify.sh` reports `open`, run
+  `gh pr merge <pr> --repo "$repo" --auto --squash`, then
+  `gh pr checks <pr> --repo "$repo" --watch`, and re-verify. `landed` → next
+  issue. A failed check → do not fix it; report and stop. Never
+  `--delete-branch`; the repo deletes merged branches itself.
+- **When it is absent:** never run `gh pr merge` in any form. The `open` PR is
+  a finished build. Record its verdict and continue with the next eligible
+  issue.
+
+When the picker reports the queue empty (exit 3) because the remaining issues
+are `Blocked by` an unmerged PR, stop and report which PRs are waiting on the
+owner. Do not wait for a merge that isn't yours to make.
 
 ## Escalation
 
