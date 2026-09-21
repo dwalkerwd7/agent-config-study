@@ -1,12 +1,11 @@
-import { Octokit } from 'octokit';
 import { describe, expect, it } from 'vitest';
 import {
   MAX_LIMIT_RETRIES,
-  OctokitCollectorGitHub,
   SEARCH_INTERVAL_MS,
-  createOctokit,
+  createCollectorGitHub,
   createPacer,
   limitHandlers,
+  type CollectorGitHub,
 } from '../src/github.js';
 import { createLogger } from '../src/logger.js';
 
@@ -34,18 +33,25 @@ function stubFetch(replies: Reply[]): { fetch: typeof fetch; calls: Recorded[] }
       headers: { 'content-type': 'application/json', ...reply.headers },
     });
   };
-  return { fetch: stub as typeof fetch, calls };
+  return { fetch: stub, calls };
 }
 
-/** A client over the stub, with the plugins and the search pacer out of the way. */
-function client(replies: Reply[]): { github: OctokitCollectorGitHub; calls: Recorded[] } {
+const TOKEN = 'test-token-not-a-credential';
+
+/**
+ * The production client over the stub, plugins included, with the search pacer
+ * replaced by one that records each call and how many requests preceded it.
+ */
+function client(replies: Reply[]): { github: CollectorGitHub; calls: Recorded[]; paced: number[] } {
   const { fetch, calls } = stubFetch(replies);
-  const octokit = new Octokit({
-    request: { fetch },
-    throttle: { enabled: false },
-    retry: { enabled: false },
+  const paced: number[] = [];
+  const github = createCollectorGitHub({
+    token: TOKEN,
+    logger: createLogger('info', capture().stream),
+    fetch,
+    paceSearch: async () => void paced.push(calls.length),
   });
-  return { github: new OctokitCollectorGitHub(octokit, async () => {}), calls };
+  return { github, calls, paced };
 }
 
 function capture(): { lines: string[]; stream: { write: (line: string) => void } } {
@@ -91,10 +97,12 @@ const searchFixture = {
   ],
 };
 
-describe('OctokitCollectorGitHub.searchCode', () => {
+describe('CollectorGitHub.searchCode', () => {
   it('maps items and passes total_count and incomplete_results through (C-4)', async () => {
-    const { github, calls } = client([{ body: searchFixture }]);
+    const { github, calls, paced } = client([{ body: searchFixture }]);
     const page = await github.searchCode('filename:mcp.json', 3);
+    // The pacer ran once, before the request went out.
+    expect(paced).toEqual([0]);
     expect(page).toEqual({
       total_count: 1234,
       incomplete_results: true,
@@ -135,27 +143,9 @@ describe('OctokitCollectorGitHub.searchCode', () => {
     const page = await github.searchCode('filename:mcp.json', 1);
     expect(page).toEqual({ total_count: 0, incomplete_results: false, items: [] });
   });
-
-  it('waits for the pacer before each search', async () => {
-    const { fetch, calls } = stubFetch([
-      { body: { total_count: 0, incomplete_results: false, items: [] } },
-    ]);
-    const octokit = new Octokit({
-      request: { fetch },
-      throttle: { enabled: false },
-      retry: { enabled: false },
-    });
-    const order: string[] = [];
-    const github = new OctokitCollectorGitHub(octokit, async () => {
-      order.push(`paced with ${calls.length} requests sent`);
-    });
-    await github.searchCode('filename:mcp.json', 1);
-    expect(order).toEqual(['paced with 0 requests sent']);
-    expect(calls).toHaveLength(1);
-  });
 });
 
-describe('OctokitCollectorGitHub.getRepo', () => {
+describe('CollectorGitHub.getRepo', () => {
   it('maps stars, pushed_at, default_branch, fork, private and archived', async () => {
     const { github, calls } = client([
       {
@@ -185,7 +175,7 @@ describe('OctokitCollectorGitHub.getRepo', () => {
   });
 });
 
-describe('OctokitCollectorGitHub.getTree', () => {
+describe('CollectorGitHub.getTree', () => {
   it('requests the tree recursively and maps entries and truncated', async () => {
     const { github, calls } = client([
       {
@@ -221,7 +211,7 @@ describe('OctokitCollectorGitHub.getTree', () => {
   });
 });
 
-describe('OctokitCollectorGitHub.getBlob', () => {
+describe('CollectorGitHub.getBlob', () => {
   it('decodes base64 content to bytes', async () => {
     const bytes = Buffer.from(`{"note":"${BLOB_MARKER}"}\né`, 'utf8');
     // GitHub wraps base64 blob content at 60 characters.
@@ -264,7 +254,7 @@ describe('OctokitCollectorGitHub.getBlob', () => {
   });
 });
 
-describe('OctokitCollectorGitHub.lastCommitForPath', () => {
+describe('CollectorGitHub.lastCommitForPath', () => {
   it('asks for one commit on the path and returns its sha and committer date', async () => {
     const { github, calls } = client([
       {
@@ -387,7 +377,7 @@ describe('limitHandlers', () => {
   });
 });
 
-describe('createOctokit', () => {
+describe('createCollectorGitHub', () => {
   it('retries a secondary rate limit through the throttling plugin and logs it', async () => {
     const { lines, stream } = capture();
     const { fetch, calls } = stubFetch([
@@ -398,12 +388,12 @@ describe('createOctokit', () => {
       },
       { body: { sha: 'tree0000', truncated: false, tree: [] } },
     ]);
-    const octokit = createOctokit(
-      'test-token-not-a-credential',
-      createLogger('info', stream),
+    const github = createCollectorGitHub({
+      token: TOKEN,
+      logger: createLogger('info', stream),
       fetch,
-    );
-    const github = new OctokitCollectorGitHub(octokit, async () => {});
+      paceSearch: async () => {},
+    });
 
     expect(await github.getTree('octo', 'demo', 'tree0000')).toEqual({
       sha: 'tree0000',
