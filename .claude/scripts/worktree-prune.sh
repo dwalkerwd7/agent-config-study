@@ -1,40 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# worktree-prune.sh [--force] — remove finished agent worktrees.
+# worktree-prune.sh [--landed-only] [--force] — remove finished agent worktrees.
 #
 # Portable: it selects worktrees by BRANCH NAME (anything under `agent/`, or
 # $AGENT_BRANCH_PREFIX), never by path, so it works whether worktrees live in a
 # bare-repo container, beside the checkout, or anywhere else.
 #
-# Run between builds, when nothing is in flight. The dispatcher is the sole
-# owner of agent worktrees, so there is no cross-instance race.
+# A worktree is LANDED when its work is provably on the default branch:
 #
-# A worktree becomes a candidate once its branch is gone from origin. That alone
-# is NOT enough to delete it, because two very different states look identical
-# from the remote's point of view:
+#   - its branch is the head of a merged PR (a squash merge rewrote the commits,
+#     so only the merged-PR list can say so), or
+#   - it has local commits and every one of them has an identical patch on the
+#     default branch (`git cherry`: a rebase or single-commit squash merge).
 #
-#   - its PR was squash-merged  -> the host deleted the branch; the work is in
-#                                  the default branch under a new commit  -> prune
-#   - it was never pushed       -> an interrupted or abandoned build; the work
-#                                  exists nowhere else                    -> KEEP
+# Landed is the ONLY state in which the work is known to exist somewhere else,
+# so it is what decides. These states all look alike from the remote, and are
+# not landed:
 #
-# Squash is exactly why the local commits are unreachable from the default
-# branch in the first case, so "has commits main doesn't" cannot tell the two
-# apart — it flags every finished build as unbacked. The merged-PR list can, so
-# that is what decides.
+#   - never pushed, with commits -> an interrupted build; the work exists
+#                                   nowhere else                        -> KEEP
+#   - clean, no commits, issue open -> a FRESH build: a builder has just been
+#                                   handed this worktree and has not written
+#                                   anything yet. Deleting it is how a live
+#                                   builder lost its worktree before    -> KEEP
+#   - clean, no commits, issue closed -> abandoned                      -> prune
 #
-# Two further guards, applied to anything not known-merged. A worktree is never
-# removed while it holds work that exists nowhere else:
-#   - uncommitted or untracked files, or
-#   - local commits not reachable from the default branch.
-# Either one makes it skip and say why. `--force` overrides every guard.
+# Guards that apply to everything, landed or not:
+#   - a process whose cwd is inside the worktree (a builder, a dev server, a
+#     shell) means it is in use. Never removed, not even with --force.
+#   - uncommitted or untracked files are work that exists nowhere else. Kept
+#     unless --force.
 #
-# A branch that STILL exists on origin is always kept — it is either in review
-# or a pushed build to resume after an interruption. A detached worktree is
-# reported, never removed: with no branch there is no way to tell what it is.
+# A branch that STILL exists on origin is kept unless its PR merged: it is in
+# review, or a pushed build to resume. A detached worktree is reported, never
+# removed: with no branch there is no way to tell what it is.
+#
+# --landed-only  remove landed worktrees and nothing else. Safe during a drain;
+#                dispatch-prepare.sh runs it before every pick.
+# --force        also remove unlanded worktrees and ones with uncommitted files.
+#                For a person cleaning up by hand, never for an agent.
 
 force=false
-[ "${1:-}" = "--force" ] && force=true
+landed_only=false
+for arg in "$@"; do
+  case "$arg" in
+    --force) force=true ;;
+    --landed-only) landed_only=true ;;
+    *) echo "worktree-prune: unknown argument '$arg'" >&2; exit 2 ;;
+  esac
+done
 prefix="${AGENT_BRANCH_PREFIX:-agent/}"
 
 git worktree prune
@@ -46,22 +60,38 @@ primary="$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10)
 remote_set=" $(git ls-remote --heads origin 2>/dev/null \
   | sed -nE 's#.*refs/heads/(.*)$#\1#p' | tr '\n' ' ') "
 
-# Head branches of merged PRs — the only reliable "this work landed" signal once
-# a squash merge has rewritten the commits. Empty if gh is unavailable or this
-# repo has no host, which makes every unpushed-looking worktree fall through to
-# the guards and be kept: the safe direction to fail.
+# Head branches of merged PRs, and open issue numbers. Both empty if gh is
+# unavailable: then nothing counts as merged and every issue counts as open,
+# which keeps worktrees rather than removing them, the safe direction to fail.
 merged_set=" $(gh pr list --state merged --limit 200 --json headRefName \
   --jq '.[].headRefName' 2>/dev/null | tr '\n' ' ') "
+if open_issues="$(gh issue list --state open --limit 1000 --json number --jq '.[].number' 2>/dev/null)"; then
+  open_set=" $(printf '%s' "$open_issues" | tr '\n' ' ') "
+else
+  open_set="unknown"
+fi
 
-# Why this worktree must not be removed, or empty when it is safe to remove.
-unsafe_reason() {
-  local path="$1" dirty ahead
-  [ "$force" = true ] && return 1
-  dirty="$(git -C "$path" status --porcelain 2>/dev/null | wc -l)"
-  if [ "$dirty" -gt 0 ]; then echo "$dirty uncommitted/untracked file(s)"; return 0; fi
+# Processes whose cwd is inside the worktree, as "pid:comm" (dispatch-verify.sh's
+# definition of live work). Empty when nothing is working there.
+live_in() {
+  local real d cwd out=""
+  real="$(cd "$1" 2>/dev/null && pwd -P)" || return 0
+  for d in /proc/[0-9]*; do
+    [ "${d#/proc/}" = "$$" ] && continue
+    cwd="$(readlink "$d/cwd" 2>/dev/null || true)"
+    case "$cwd" in "$real"|"$real"/*) out+="${d#/proc/}:$(tr -d '\0' < "$d/comm" 2>/dev/null) " ;; esac
+  done
+  printf '%s' "$out"
+}
+
+# How the work landed, or empty when it has not.
+landed_how() {
+  local path="$1" branch="$2" ahead
+  case "$merged_set" in *" $branch "*) echo "PR merged"; return ;; esac
   ahead="$(git -C "$path" rev-list --count "$base"..HEAD 2>/dev/null || echo 0)"
-  if [ "$ahead" -gt 0 ]; then echo "$ahead unpushed commit(s)"; return 0; fi
-  return 1
+  if [ "$ahead" -gt 0 ] && ! git -C "$path" cherry "$base" HEAD 2>/dev/null | grep -q '^+'; then
+    echo "every commit already on $base"
+  fi
 }
 
 remove_worktree() {
@@ -85,21 +115,48 @@ git worktree list --porcelain | awk '
   fi
   case "$branch" in "$prefix"*) : ;; *) continue ;; esac   # not an agent worktree
 
-  case "$remote_set" in
-    *" $branch "*) continue ;;   # still on origin — in review or to resume; keep
-  esac
-
-  case "$merged_set" in
-    *" $branch "*)               # PR merged — the work landed, under a squash
-      remove_worktree "$path" "$branch"
-      echo "pruned worktree (PR merged): $path ($branch)"
-      continue ;;
-  esac
-
-  if reason="$(unsafe_reason "$path")"; then
-    echo "KEPT ($reason, no merged PR, nothing on origin): $path ($branch)"
-    echo "     commit and push it, or re-run with --force to discard it."
+  live="$(live_in "$path")"
+  if [ -n "$live" ]; then
+    echo "KEPT (in use by ${live% }): $path ($branch)"
     continue
+  fi
+
+  how="$(landed_how "$path" "$branch")"
+  if [ -z "$how" ]; then
+    case "$remote_set" in *" $branch "*) continue ;; esac   # in review or to resume
+  fi
+  [ -z "$how" ] && [ "$landed_only" = true ] && continue
+
+  dirty="$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "$dirty" -gt 0 ] && [ "$force" = false ]; then
+    echo "KEPT ($dirty uncommitted/untracked file(s)${how:+, though $how}): $path ($branch)"
+    echo "     commit and push them, or re-run with --force to discard them."
+    continue
+  fi
+
+  if [ -n "$how" ]; then
+    remove_worktree "$path" "$branch"
+    echo "pruned worktree ($how): $path ($branch)"
+    continue
+  fi
+
+  if [ "$force" = false ]; then
+    ahead="$(git -C "$path" rev-list --count "$base"..HEAD 2>/dev/null || echo 0)"
+    if [ "$ahead" -gt 0 ]; then
+      echo "KEPT ($ahead unpushed commit(s), not on $base, no merged PR): $path ($branch)"
+      echo "     commit and push it, or re-run with --force to discard it."
+      continue
+    fi
+    n="$(printf '%s' "$branch" | sed -nE "s#^${prefix}([0-9]+)-.*#\1#p")"
+    if [ -z "$n" ] || [ "$open_set" = unknown ]; then
+      echo "KEPT (clean, but cannot tell whether its issue is open: possibly a fresh build): $path ($branch)"
+      continue
+    fi
+    case "$open_set" in
+      *" $n "*)
+        echo "KEPT (clean, but issue #$n is open: possibly a fresh build): $path ($branch)"
+        continue ;;
+    esac
   fi
   remove_worktree "$path" "$branch"
   echo "pruned worktree: $path ($branch)"
