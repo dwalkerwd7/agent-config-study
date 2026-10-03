@@ -16,6 +16,16 @@ overrides:
   # cannot know that. Drop these once prisma ships the fixed versions itself.
   deepmerge-ts: ^8.0.2
   mysql2: ^3.23.1
+  # GHSA-6j4f-fj2g-mc7p + GHSA-qhr7-859c-m2p7 (brace-expansion 4.x/5.x, DoS).
+  'brace-expansion@>=4.0.0 <6': ^5.0.12
+
+# GHSA-vfj7-8cjw-p6xm (braces <=3.0.3, DoS on deeply nested patterns) has no
+# patched release. braces reaches us only through @next/eslint-plugin-next
+# (fast-glob, micromatch), a lint-time dev dependency that only ever expands
+# our own lint globs. Drop this entry once braces ships a fix.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
 
 # Dependencies permitted to run install scripts.
 allowBuilds:
