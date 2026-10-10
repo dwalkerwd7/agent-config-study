@@ -48,7 +48,7 @@ and the reason matters more than the rule:
 - **`NODE_ENV` stays out of `.env.example`.** Setting it to `development` breaks
   `next build` — the build renders with a dev React build and crashes on the
   built-in error page. Its absence is deliberate; adding it back is a blocker.
-- **`docker-compose.yml` keeps `name: driftmark`.** Compose otherwise names the
+- **`docker-compose.yml` keeps `name: agent-config-study`.** Compose otherwise names the
   project after the directory, and since this repo is laid out as worktrees that
   is the branch name — every worktree would get its own empty database.
 - **The `overrides` in `pnpm-workspace.yaml` stay.** The Prisma CLI pulls in
