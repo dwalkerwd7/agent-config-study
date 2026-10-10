@@ -1,164 +1,116 @@
-# driftmark
+# agent-config-study
 
-A GitHub App that inventories AI coding-agent configuration across an organization's
-repositories and reports when it changes.
+A pre-registered study of AI coding-agent configuration committed to public GitHub
+repositories: MCP server configs, Claude Code settings and skills, Cursor rules, and
+instruction files such as `CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md`.
 
-**Status: parked.** The [corpus study](#corpus-study) that decided whether to build it came
-out short of its pre-registered build criteria in two independent runs, so the product is not
-being built. The monorepo, services and build pipeline described under [Install](#install)
-work, but none of the scanning, inventory or drift behaviour below is implemented. The rest of
-this README describes the product as it was planned. See [Status](#status).
+The study asks how these files are written and maintained:
 
-## The problem
+- How many MCP servers a config holds, and over which transports.
+- Whether package references are pinned to a version.
+- Whether configs carry credential-shaped values.
+- Whether one repository's configs for different clients agree.
+- How stale configs are compared with the rest of the repository.
 
-The files that configure a coding agent — which MCP servers it can call, which skills it loads,
-which instructions it follows — sit in the repository and change what the agent does and what
-tools it can reach. They are committed like any other file, but they are rarely reviewed in a
-pull request and nobody tracks them across an organization.
+The questions, the collection method and the decision criteria were fixed before any data
+was collected, so the results could not be reinterpreted afterwards.
 
-## What it does
+## Findings
 
-Three layers:
+Two independent collection runs, both on 2026-10-10. The second run left out every repository
+the first one collected. Both stopped on the planned 5,000-file cap, so both are recorded as
+partial runs. Every figure describes the collected corpus only, not GitHub as a whole, and
+comes from the analysis output in [study/output/](study/output/). Percentages are over
+deduplicated files (one per content hash).
 
-1. **Static checks.** Reads each config file and reports hardcoded secrets, package and image
-   references with no version pin, plaintext `http://` endpoints, and `docker` invocations that
-   mount broad host paths such as `/` or the Docker socket.
-2. **Org-wide inventory.** Walks every repository in the organization and records which agent
-   config files exist, which MCP servers they declare, and how they are launched.
-3. **Drift detection.** Compares each scan against a baseline you have approved and reports what
-   was added, removed or modified since.
+|                                                                         | Run 1         | Run 2         |
+| ----------------------------------------------------------------------- | ------------- | ------------- |
+| Repositories                                                            | 1,147         | 1,038         |
+| Config files, deduplicated (raw)                                        | 4,152 (5,000) | 4,112 (4,993) |
+| MCP configs, deduplicated                                               | 888           | 849           |
+| Median servers per MCP config                                           | 1             | 1             |
+| Package references not pinned to an exact version                       | 91.9% of 518  | 85.6% of 500  |
+| MCP configs with a credential-shaped value in `env` or `headers`        | 3.9% of 888   | 2.4% of 849   |
+| Multi-client repositories whose configs name different servers          | 16.3% of 252  | 14.0% of 285  |
+| MCP configs: median days behind the repository's last push              | 22.3          | 20.5          |
+| MCP configs: share more than 90 days behind                             | 29.0%         | 26.0%         |
+| MCP configs containing Laravel's installer-written server (exploratory) | 35.4%         | 36.3%         |
 
-driftmark reports and compares. It does not block merges, gate CI or prevent anything; a finding
-is a thing to go look at, not an incident.
+The clearest result is pinning. In both runs most package references run whatever version
+the registry serves at launch: a bare `npx -y package`, or an explicit `@latest`. Other
+signals were weaker or less stable between runs. Many MCP configs hold a single server, and a
+large share of those were written by one framework's installer rather than by hand.
 
-## What it checks
+Credential-shaped values were redacted when the files were collected. They appear only as
+counts by detector type, and none was tested against a live service. No repository or owner
+is named anywhere in the published output.
 
-| Kind         | Paths                                                       |
-| ------------ | ----------------------------------------------------------- |
-| MCP servers  | `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`         |
-| Agent skills | `.claude/skills/**/SKILL.md`                                |
-| Rules files  | `.cursor/rules/**/*.mdc`                                    |
-| Instructions | `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md` |
+The full write-up is in [study/results.md](study/results.md), including:
 
-MCP config is parsed as JSON with comments and trailing commas, because that is what the editors
-themselves accept. Markdown surfaces are split into YAML frontmatter and body.
+- the method and its known biases
+- the per-question answers
+- a calibration check against priors recorded in advance
+- competing explanations for each signal
 
-## Install
+## Method in brief
 
-Requires Node 22+, pnpm 11+ and Docker.
+1. **Discovery.** GitHub code search across ten config file paths, each split into four file
+   size bands, with forks excluded.
+2. **Sampling.** A seeded draw balanced across the ten paths and the size bands, so the cap
+   isn't spent on whichever path was searched first.
+3. **Collection.** Each drawn repository's default-branch tree is read, and every matching
+   file is fetched. Credential-shaped values are redacted before anything is written to disk.
+4. **Analysis.** A standard-library Python script parses the configs and writes one findings
+   file per run.
+
+Because the sample is balanced by design, file counts per path reflect the sampling quota,
+not how common each file type is.
+
+## Repository layout
+
+| Path                                 | Contents                                                    |
+| ------------------------------------ | ----------------------------------------------------------- |
+| [study/plan.md](study/plan.md)       | The pre-registered plan: questions Q1–Q14, criteria, priors |
+| [study/rules.md](study/rules.md)     | Rules for collection, redaction, analysis and publication   |
+| [study/results.md](study/results.md) | The write-up                                                |
+| [study/runs.md](study/runs.md)       | What changed from one collection run to the next            |
+| [study/output/](study/output/)       | Generated findings, one file per run                        |
+| [study/analyze.py](study/analyze.py) | The analysis script                                         |
+| [apps/collector/](apps/collector/)   | The collector (TypeScript)                                  |
+| `study/corpus/`                      | Raw collected files. Gitignored and never published         |
+
+The other directories under `apps/` and `packages/` are an unused application scaffold and
+play no part in the study.
+
+## Reproducing
+
+Requires Node 22+, pnpm 11+ and Python 3.11+.
 
 ```bash
 git clone git@github.com:dwalkerwd7/agent-config-study.git
 cd agent-config-study
 pnpm install
-
-cp .env.example .env          # then fill in GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
-openssl rand -base64 32       # use this for AUTH_SECRET
-
-pnpm services:up              # postgres + redis via docker compose
-pnpm db:migrate               # apply the schema
-pnpm build
 ```
 
-Run the pieces:
+The collector needs two environment variables:
+
+- `GITHUB_TOKEN`: a GitHub token with read access to public repositories.
+- `CORPUS_SALT`: a secret of your own. The collector fingerprints each redacted value with
+  it (HMAC-SHA256), so repeated values can be matched without being stored.
+
+`pnpm collect` runs the collector under the 1Password CLI, with `.env` holding `op://`
+references. Without 1Password, set the two variables in your shell and run the collector
+directly:
 
 ```bash
-pnpm --filter @driftmark/api dev       # fastify api on :3001
-pnpm --filter @driftmark/api worker    # bullmq worker
-pnpm --filter @driftmark/web dev       # next.js app on :3000
-pnpm test
+pnpm -C apps/collector collect --run run1
+pnpm -C apps/collector collect --run run2 --exclude-from run1   # disjoint from run1
+python3 -I study/analyze.py --run run1      # writes study/output/findings-run1.md
 ```
 
-The GitHub OAuth callback URL is `http://localhost:3000/api/auth/callback/github`.
-
-## Example output
-
-Planned reporting format, not yet produced by the code:
-
-```
-$ driftmark scan --org acme
-
-acme/payments-api
-  .mcp.json                         3 servers
-    high    secret/github-pat        Hardcoded GitHub token in server "github" env.GITHUB_TOKEN
-    medium  mcp/unpinned-reference   server "fetch" runs "mcp-server-fetch" with no version pin
-  CLAUDE.md                         4.1 KB
-  .claude/skills/deploy/SKILL.md    allowed-tools: Bash, Read, Write
-
-acme/internal-tools
-  .cursor/mcp.json                  1 server
-    medium  mcp/broad-docker-mount   server "fs" mounts /var/run/docker.sock into a container
-    high    mcp/insecure-url         server "notes" uses a plaintext http:// URL
-
-acme/marketing-site
-  no agent configuration found
-
-3 repositories, 6 config files, 4 findings (2 high, 2 medium)
-```
-
-```
-$ driftmark drift --org acme --since 7d
-
-acme/payments-api   .mcp.json                       modified   a1b2c3d -> 9f8e7d6
-                    + server "shell"  command: bash -c
-acme/web            .claude/skills/deploy/SKILL.md  added
-acme/billing        AGENTS.md                       removed
-
-3 changes against baseline, none acknowledged
-```
-
-## Status
-
-What exists: a pnpm monorepo (`apps/api`, `apps/web`, `packages/core`, `packages/db`), a Fastify
-API with health and readiness checks, a BullMQ queue and worker, a Prisma schema covering the
-Auth.js tables, GitHub OAuth sign-in in the Next.js app, an MCP server with a placeholder tool,
-and parsing and hashing helpers in `packages/core`.
-
-The corpus collector in `apps/collector` has run twice, and the analysis of both runs is in
-`study/`. The project is parked, so none of the items below is planned.
-
-Not built yet:
-
-- The GitHub App itself — manifest, installation flow, webhook receiver and signature check.
-  Only a personal-access-token Octokit client exists.
-- Repository walking and config-file discovery.
-- Every static check listed above.
-- Baseline approval and drift comparison.
-- Any user interface beyond a sign-in button, and the `driftmark` CLI shown above.
-- Notifications of any kind.
-
-The Prisma schema currently holds only the Auth.js tables; the inventory, findings and drift
-models are not designed yet.
-
-## Corpus study
-
-Whether driftmark gets built at all depends on a study of agent configuration in public
-repositories, pre-registered before any data was collected.
-
-The study exists to test the premise above. If committed agent config turns out to be rare,
-already pinned, or actively maintained, there is nothing worth inventorying and the answer is
-no. The criteria were fixed in advance so the result cannot be reinterpreted afterwards: a gate
-on how many config files exist at all, then at least three of five signals — servers per config,
-unpinned reference rate, credential-shaped values, cross-client divergence, staleness — landing
-on the build side. A secondary purpose is to produce sanitized test fixtures and a severity
-rubric grounded in what actually appears in the wild, rather than in what seems alarming.
-
-- [study/plan.md](study/plan.md) — population, collection method, the locked questions Q1–Q14,
-  the decision criteria, and the priors recorded in advance to check calibration against
-- [study/rules.md](study/rules.md) — what may and may not be published, redaction
-  at collection, and disclosure handling
-- [study/results.md](study/results.md) — findings and the recorded decision
-- [study/runs.md](study/runs.md) — what changed from one collection run to the next
-
-**Status: decided, park.** Two independent runs, both collected 2026-10-10 and both partial
-(stopped on the 5,000-file cap), passed the gate but put only two and then one of the five
-signals on the build side, short of the three required. Unpinned package references were the
-one strong signal in both runs: 91.9% of 518 in run 1 and 85.6% of 500 in run 2, counted in
-deduplicated MCP configs within each corpus. The figures, method and biases are in
-[study/results.md](study/results.md).
-
-The raw corpus is never committed — it stays in `study/corpus/`, which is gitignored. Analysis
-output goes to `study/output/`, which is committed so that published numbers have a source.
+A new collection will not reproduce these figures exactly. Search results and repositories
+change over time, and the sampling seed is stored only in the corpus, which is never
+published.
 
 ## License
 
