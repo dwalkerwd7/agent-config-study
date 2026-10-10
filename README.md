@@ -48,8 +48,8 @@ themselves accept. Markdown surfaces are split into YAML frontmatter and body.
 Requires Node 22+, pnpm 11+ and Docker.
 
 ```bash
-git clone git@github.com:dwalkerwd7/driftmark.git
-cd driftmark
+git clone git@github.com:dwalkerwd7/agent-config-study.git
+cd agent-config-study
 pnpm install
 
 cp .env.example .env          # then fill in GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
