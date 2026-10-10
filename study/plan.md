@@ -179,3 +179,9 @@ Anything here was added after seeing data and is labeled exploratory in every ar
 **Scope.** This applies to the next collection run that is independent of the first, not to the first run. For the first run (collected 2026-10-10), this row is recorded as undetermined and counts toward neither side.
 
 **Known limits** (S-9). Lag cannot tell a stale config from a finished one that needs no edits. `pushed_at` counts pushes to any branch, so a repository can look fresher than its default branch is, which lengthens the measured lag. Configs written by an installer (see the exploratory Laravel breakdown in the first-run findings) may change only when the tool is re-run.
+
+### 10.2 Installer-generated MCP configs (added 2026-10-10)
+
+**Why.** In the first run, `php` dominated the local-path entries in Q5. Most turned out to be `artisan boost:mcp`, which the Laravel Boost package writes into each detected client's MCP config (alongside Herd's `herd-mcp.phar` where Herd is present). Configs written by an installer are a competing explanation for Q2's median and for the agreement measured by Q10 (S-9).
+
+**Measure.** The share of deduplicated MCP server entries and configs whose command runs `artisan boost:mcp` or `herd-mcp.phar`, with the share broken down by target, plus servers per config with those configs excluded. Exploratory in every artifact (S-8). It does not enter the §2 decision.
