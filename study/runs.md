@@ -38,6 +38,42 @@ Copy this block for each new run.
 Which figures can be compared with run N-1 as they stand, and which cannot, and why.
 ```
 
+## Run 2 — 2026-10-10
+
+| Field             | Value                                                      |
+| ----------------- | ---------------------------------------------------------- |
+| Collection window | 2026-10-10 07:08 to 09:34 UTC                              |
+| Status (C-8)      | partial (stop reason `file-cap`, the 5,000-file cap in §9) |
+| Collector         | commit `2179f64` (PR #42)                                  |
+| Analysis          | `study/analyze.py` as changed in the PR adding this entry  |
+| Output            | `study/output/findings-run2.md`                            |
+| Decision          | none yet (see results.md)                                  |
+
+### Changed since run 1
+
+- **Collector:** the corpus is now written per run (`study/corpus/run2/`), and the draw
+  left out every repository run 1 completed (1,147, `--exclude-from run1`). The exclusion
+  is recorded in `sampling.jsonl`. Targets, size bands, search terms, sampling method,
+  file cap and redaction detectors are unchanged. A new seed was drawn.
+- **Analysis:**
+  - `--run` selects the corpus and names the output file.
+  - Files of a repository with no repository record are left out. The file cap stopped
+    run 2 partway through one repository, leaving 7 files without a record. Run 1 had
+    none, so its figures are unchanged.
+  - The staleness row is scored by §10.1 for a run disjoint from an earlier one.
+- **Plan:** §10.1 applies from this run.
+
+### Effect on comparability
+
+- No repository is in both runs, so the two are independent samples of the same search
+  results, drawn the same way. An owner or identical file content can still appear in
+  both.
+- Discovery ran again, so search ranking and `total_count` reflect a later moment. The
+  pool run 2 drew from is the same as run 1's minus the run-1 repositories, so it leans
+  further down each slice's relevance order.
+- Every figure is comparable with run 1 except the staleness decision row, which was
+  undetermined in run 1 and is scored in run 2.
+
 ## Run 1 — 2026-10-10
 
 | Field             | Value                                                      |
