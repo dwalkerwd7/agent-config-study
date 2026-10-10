@@ -23,6 +23,7 @@ import {
   type RepoRecord,
   type ResponseRecord,
   type RunRecord,
+  type SamplingRecord,
 } from '../src/store.js';
 
 const HASH = 'a'.repeat(64);
@@ -57,9 +58,19 @@ function repo(fullName: string): RepoRecord {
     default_branch: 'main',
     head_commit: 'b'.repeat(40),
     tree_truncated: false,
-    slice_ids: ['mcp-json-s0'],
+    slice_ids: ['mcp-json-s0', 'mcp-json-s1'],
+    drawn_slice: 'mcp-json-s1',
   };
 }
+
+const HEAD = 'b'.repeat(40);
+
+const SAMPLING: SamplingRecord = {
+  seed: '0123456789abcdef'.repeat(4),
+  file_cap: 5000,
+  method: 'stratified-v1',
+  created_at: '2026-09-01T00:00:30.000Z',
+};
 
 const FILE: FileRecord = {
   repo: 'octo/demo',
@@ -125,12 +136,20 @@ describe('CorpusStore: writing records', () => {
     store.appendRepo(repo('octo/demo'));
     store.appendFile(FILE);
     store.appendRedaction(REDACTION);
+    store.appendSampling(SAMPLING);
 
     expect(lines('runs')).toEqual([RUN]);
     expect(lines('responses')).toEqual([response('s1', 1), response('s1', 2)]);
     expect(lines('repos')).toEqual([repo('octo/demo')]);
     expect(lines('files')).toEqual([FILE]);
     expect(lines('redactions')).toEqual([REDACTION]);
+    expect(lines('sampling')).toEqual([SAMPLING]);
+  });
+
+  it('persists the slice a repo was drawn for', () => {
+    const store = new CorpusStore(root);
+    store.appendRepo(repo('octo/demo'));
+    expect(lines('repos')).toEqual([expect.objectContaining({ drawn_slice: 'mcp-json-s1' })]);
   });
 
   it('keeps a string with newlines on a single line', () => {
@@ -169,6 +188,24 @@ describe('CorpusStore: writing records', () => {
     const store = new CorpusStore(root);
     store.appendFile({ ...FILE, content: 'raw file body' } as FileRecord);
     expect(lines('files')).toEqual([FILE]);
+    store.appendRepo({ ...repo('octo/demo'), readme: 'raw readme' } as RepoRecord);
+    expect(lines('repos')).toEqual([repo('octo/demo')]);
+    store.appendSampling({ ...SAMPLING, salt: 'must-never-reach-disk' } as SamplingRecord);
+    expect(lines('sampling')).toEqual([SAMPLING]);
+    expect(readFileSync(join(root, 'sampling.jsonl'), 'utf8')).not.toContain(
+      'must-never-reach-disk',
+    );
+  });
+
+  it('refuses a sampling record whose seed or file cap is malformed', () => {
+    const store = new CorpusStore(root);
+    expect(() => store.appendSampling({ ...SAMPLING, seed: 'short' })).toThrow(CorpusRecordError);
+    expect(() => store.appendSampling({ ...SAMPLING, seed: SAMPLING.seed.toUpperCase() })).toThrow(
+      CorpusRecordError,
+    );
+    expect(() => store.appendSampling({ ...SAMPLING, file_cap: 0 })).toThrow(CorpusRecordError);
+    expect(() => store.appendSampling({ ...SAMPLING, file_cap: 1.5 })).toThrow(CorpusRecordError);
+    expect(tree(root)).toEqual([]);
   });
 
   it('refuses a redaction whose hash is not a hex digest', () => {
@@ -199,7 +236,9 @@ describe('CorpusStore: resume readers', () => {
   it('returns empty sets before anything is written', () => {
     const store = new CorpusStore(root);
     expect(store.completedPages()).toEqual(new Set());
-    expect(store.completedRepos()).toEqual(new Set());
+    expect(store.completedRepos()).toEqual(new Map());
+    expect(store.fileRefs()).toEqual([]);
+    expect(store.sampling()).toEqual([]);
   });
 
   it('reads completed pages and repos', () => {
@@ -209,7 +248,12 @@ describe('CorpusStore: resume readers', () => {
     store.appendRepo(repo('octo/demo'));
     store.appendRepo(repo('acme/tools'));
     expect(store.completedPages()).toEqual(new Set(['s1:1', 's2:3']));
-    expect(store.completedRepos()).toEqual(new Set(['octo/demo', 'acme/tools']));
+    expect(store.completedRepos()).toEqual(
+      new Map([
+        ['octo/demo', HEAD],
+        ['acme/tools', HEAD],
+      ]),
+    );
   });
 
   it('skips a truncated final line and reads every complete line before it', () => {
@@ -220,14 +264,14 @@ describe('CorpusStore: resume readers', () => {
     appendFileSync(join(root, 'responses.jsonl'), '{"slice_id":"s1","page":3,"que');
     appendFileSync(join(root, 'repos.jsonl'), '{"full_name":"acme/to');
     expect(store.completedPages()).toEqual(new Set(['s1:1', 's1:2']));
-    expect(store.completedRepos()).toEqual(new Set(['octo/demo']));
+    expect(store.completedRepos()).toEqual(new Map([['octo/demo', HEAD]]));
   });
 
   it('does not trust an unterminated final line even when it parses', () => {
     const store = new CorpusStore(root);
     store.appendRepo(repo('octo/demo'));
-    appendFileSync(join(root, 'repos.jsonl'), '{"full_name":"acme/tools"}');
-    expect(store.completedRepos()).toEqual(new Set(['octo/demo']));
+    appendFileSync(join(root, 'repos.jsonl'), `{"full_name":"acme/tools","head_commit":"${HEAD}"}`);
+    expect(store.completedRepos()).toEqual(new Map([['octo/demo', HEAD]]));
   });
 
   it('drops the truncated tail before the next append, so records stay one per line', () => {
@@ -243,7 +287,7 @@ describe('CorpusStore: resume readers', () => {
     mkdirSync(root);
     writeFileSync(join(root, 'repos.jsonl'), '{"full_na');
     const store = new CorpusStore(root);
-    expect(store.completedRepos()).toEqual(new Set());
+    expect(store.completedRepos()).toEqual(new Map());
     store.appendRepo(repo('octo/demo'));
     expect(lines('repos')).toEqual([repo('octo/demo')]);
   });
@@ -297,10 +341,48 @@ describe('CorpusStore: resume readers', () => {
     );
   });
 
+  it('reads file refs in the order written', () => {
+    const store = new CorpusStore(root);
+    store.appendFile(FILE);
+    store.appendFile({ ...FILE, repo: 'acme/tools', path: 'CLAUDE.md' });
+    appendFileSync(join(root, 'files.jsonl'), '{"repo":"acme/tools","commit_sha":"b');
+    expect(store.fileRefs()).toEqual([
+      { repo: 'octo/demo', commit_sha: HEAD, path: '.cursor/mcp.json' },
+      { repo: 'acme/tools', commit_sha: HEAD, path: 'CLAUDE.md' },
+    ]);
+  });
+
   it('throws on a complete line missing the fields it keys on', () => {
     mkdirSync(root);
     writeFileSync(join(root, 'repos.jsonl'), '{"owner":"octo"}\n');
     expect(() => new CorpusStore(root).completedRepos()).toThrow(CorpusReadError);
+    writeFileSync(join(root, 'repos.jsonl'), '{"full_name":"octo/demo"}\n');
+    expect(() => new CorpusStore(root).completedRepos()).toThrow(CorpusReadError);
+  });
+
+  it('reads sampling records back, skipping a truncated tail', () => {
+    const store = new CorpusStore(root);
+    store.appendSampling(SAMPLING);
+    appendFileSync(join(root, 'sampling.jsonl'), '{"seed":"fedc');
+    expect(store.sampling()).toEqual([SAMPLING]);
+    // The next append drops the tail, so the stream stays one record per line.
+    const later = { ...SAMPLING, seed: 'f'.repeat(64) };
+    new CorpusStore(root).appendSampling(later);
+    expect(lines('sampling')).toEqual([SAMPLING, later]);
+    expect(new CorpusStore(root).sampling()).toEqual([SAMPLING, later]);
+  });
+
+  it.each([
+    ['a short seed', { ...SAMPLING, seed: 'abc' }],
+    ['a missing file cap', { ...SAMPLING, file_cap: undefined }],
+    ['another method', { ...SAMPLING, method: 'first-come' }],
+    ['a missing created_at', { ...SAMPLING, created_at: 7 }],
+  ])('throws on a sampling line with %s, without its content', (_label, record) => {
+    mkdirSync(root);
+    writeFileSync(join(root, 'sampling.jsonl'), `${JSON.stringify(record)}\n`);
+    const store = new CorpusStore(root);
+    expect(() => store.sampling()).toThrow(CorpusReadError);
+    expect(() => store.sampling()).toThrow('sampling.jsonl is corrupt at line 1');
   });
 });
 

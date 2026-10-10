@@ -65,6 +65,8 @@ export interface RepoRecord {
   head_commit: string;
   tree_truncated: boolean;
   slice_ids: string[];
+  /** The slice (stratum) the repository was drawn for in expansion, one of `slice_ids`. */
+  drawn_slice: string;
 }
 
 /** Provenance for one collected file (C-3), classified at collection (C-5). */
@@ -101,7 +103,28 @@ export interface RedactionRecord {
   hash: string;
 }
 
-export const STREAMS = ['runs', 'responses', 'repos', 'files', 'redactions'] as const;
+/**
+ * The expansion draw's parameters (`study/plan.md` §5). Written once, by the
+ * first run that reaches expansion, before anything is expanded; every later
+ * run reuses the first record's seed so a resumed run draws the same sequence.
+ * The seed is random and not secret. It is not the redaction salt.
+ */
+export interface SamplingRecord {
+  /** 32 random bytes, hex. */
+  seed: string;
+  file_cap: number;
+  method: 'stratified-v1';
+  created_at: string;
+}
+
+/** The fields of a file record that identify it: what resume and the draw replay need. */
+export interface FileRef {
+  repo: string;
+  commit_sha: string;
+  path: string;
+}
+
+export const STREAMS = ['runs', 'responses', 'repos', 'files', 'redactions', 'sampling'] as const;
 export type Stream = (typeof STREAMS)[number];
 
 /**
@@ -136,6 +159,8 @@ export class CorpusReadError extends Error {
 }
 
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
+/** 32 bytes as lower-case hex: the same shape as a SHA-256 digest. */
+const HEX_SEED = HEX_SHA256;
 
 export class CorpusStore {
   readonly #root: string;
@@ -185,6 +210,20 @@ export class CorpusStore {
       head_commit: record.head_commit,
       tree_truncated: record.tree_truncated,
       slice_ids: [...record.slice_ids],
+      drawn_slice: record.drawn_slice,
+    });
+  }
+
+  appendSampling(record: SamplingRecord): void {
+    if (!HEX_SEED.test(record.seed)) throw new CorpusRecordError('seed');
+    if (!Number.isSafeInteger(record.file_cap) || record.file_cap < 1) {
+      throw new CorpusRecordError('file_cap');
+    }
+    this.#append('sampling', {
+      seed: record.seed,
+      file_cap: record.file_cap,
+      method: record.method,
+      created_at: record.created_at,
     });
   }
 
@@ -300,28 +339,55 @@ export class CorpusStore {
    * resumed inside a repository does not record a file twice.
    */
   completedFiles(): Set<string> {
-    const done = new Set<string>();
-    for (const [value, line] of this.#read('files')) {
+    return new Set(this.fileRefs().map((ref) => fileKey(ref.repo, ref.commit_sha, ref.path)));
+  }
+
+  /** Every file record already written, reduced to the fields that identify it, in order. */
+  fileRefs(): FileRef[] {
+    return this.#read('files').map(([value, line]) => {
       const repo = field(value, 'repo');
       const commit = field(value, 'commit_sha');
       const path = field(value, 'path');
       if (typeof repo !== 'string' || typeof commit !== 'string' || typeof path !== 'string') {
         throw new CorpusReadError('files', line);
       }
-      done.add(fileKey(repo, commit, path));
+      return { repo, commit_sha: commit, path };
+    });
+  }
+
+  /** Every repository already expanded: full name to the head commit it was expanded at. */
+  completedRepos(): Map<string, string> {
+    const done = new Map<string, string>();
+    for (const [value, line] of this.#read('repos')) {
+      const name = field(value, 'full_name');
+      const head = field(value, 'head_commit');
+      if (typeof name !== 'string' || typeof head !== 'string') {
+        throw new CorpusReadError('repos', line);
+      }
+      done.set(name, head);
     }
     return done;
   }
 
-  /** Full names of every repository already expanded. */
-  completedRepos(): Set<string> {
-    const done = new Set<string>();
-    for (const [value, line] of this.#read('repos')) {
-      const name = field(value, 'full_name');
-      if (typeof name !== 'string') throw new CorpusReadError('repos', line);
-      done.add(name);
-    }
-    return done;
+  /** Every sampling record, in the order written. Only the first one is used. */
+  sampling(): SamplingRecord[] {
+    return this.#read('sampling').map(([value, line]) => {
+      const seed = field(value, 'seed');
+      const fileCap = field(value, 'file_cap');
+      const method = field(value, 'method');
+      const createdAt = field(value, 'created_at');
+      if (
+        typeof seed !== 'string' ||
+        !HEX_SEED.test(seed) ||
+        !isInteger(fileCap) ||
+        // Another method's sequence cannot be reproduced by this code.
+        method !== 'stratified-v1' ||
+        typeof createdAt !== 'string'
+      ) {
+        throw new CorpusReadError('sampling', line);
+      }
+      return { seed, file_cap: fileCap, method, created_at: createdAt };
+    });
   }
 
   /**

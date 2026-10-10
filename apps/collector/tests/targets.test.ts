@@ -3,18 +3,23 @@ import { TARGETS, matchTarget } from '../src/targets.js';
 
 describe('matchTarget', () => {
   it.each([
-    ['.mcp.json', 'mcp', 'claude-code'],
-    ['.cursor/mcp.json', 'mcp', 'cursor'],
-    ['.vscode/mcp.json', 'mcp', 'vscode'],
-    ['.junie/mcp/mcp.json', 'mcp', 'junie'],
-    ['.claude/settings.json', 'settings', 'claude-code'],
-    ['.claude/skills/review/SKILL.md', 'skill', 'claude-code'],
-    ['.cursor/rules/style.mdc', 'rules', 'cursor'],
-    ['CLAUDE.md', 'instructions', 'claude-code'],
-    ['AGENTS.md', 'instructions', 'agents-md'],
-    ['.github/copilot-instructions.md', 'instructions', 'copilot'],
-  ])('classifies %s', (path, kind, client) => {
-    expect(matchTarget(path)).toEqual({ class: 'config', kind, client });
+    ['.mcp.json', 'mcp', 'claude-code', '.mcp.json'],
+    ['.cursor/mcp.json', 'mcp', 'cursor', '.cursor/mcp.json'],
+    ['.vscode/mcp.json', 'mcp', 'vscode', '.vscode/mcp.json'],
+    ['.junie/mcp/mcp.json', 'mcp', 'junie', '.junie/mcp/mcp.json'],
+    ['.claude/settings.json', 'settings', 'claude-code', '.claude/settings.json'],
+    ['.claude/skills/review/SKILL.md', 'skill', 'claude-code', '.claude/skills/**/SKILL.md'],
+    ['.cursor/rules/style.mdc', 'rules', 'cursor', '.cursor/rules/**'],
+    ['CLAUDE.md', 'instructions', 'claude-code', 'CLAUDE.md'],
+    ['AGENTS.md', 'instructions', 'agents-md', 'AGENTS.md'],
+    [
+      '.github/copilot-instructions.md',
+      'instructions',
+      'copilot',
+      '.github/copilot-instructions.md',
+    ],
+  ])('classifies %s', (path, kind, client, target) => {
+    expect(matchTarget(path)).toEqual({ class: 'config', kind, client, target });
   });
 
   it('has a case above for every target in the list', () => {
@@ -26,16 +31,19 @@ describe('matchTarget', () => {
       class: 'config',
       kind: 'skill',
       client: 'claude-code',
+      target: '.claude/skills/**/SKILL.md',
     });
     expect(matchTarget('.claude/skills/SKILL.md')).toEqual({
       class: 'config',
       kind: 'skill',
       client: 'claude-code',
+      target: '.claude/skills/**/SKILL.md',
     });
     expect(matchTarget('.cursor/rules/frontend/react/hooks.mdc')).toEqual({
       class: 'config',
       kind: 'rules',
       client: 'cursor',
+      target: '.cursor/rules/**',
     });
   });
 
