@@ -162,4 +162,20 @@ Deliverables at stop: answers to Q1–Q14, a decision recorded against §2, a sa
 
 Anything here was added after seeing data and is labeled exploratory in every artifact it appears in (S-8).
 
-(none yet)
+### 10.1 Staleness threshold for the §2 decision row (added 2026-10-10)
+
+**Why.** The §2 row "Median config age vs repo age" names no number ("config notably staler" vs "tracks repo"), so it cannot be scored mechanically. After the first run, that row decides the outcome: the other four rows give two build, one don't-build and one in between. A threshold chosen while looking at the result is exactly what §2 exists to prevent, so it is set here and applied only to data not yet collected.
+
+**Measure.** For each deduplicated MCP config (C-7) with a known last commit, the lag in days between the last commit touching the file and the repository's `pushed_at` at collection, floored at 0. The paired lag is the measure. The difference between the median config age and the median repository age is not: those are two separate distributions, not a comparison within each repository.
+
+**Threshold.**
+
+| Side        | Condition                                                       |
+| ----------- | --------------------------------------------------------------- |
+| Build       | median lag ≥ 90 days, or ≥ 50% of configs lag more than 90 days |
+| Don't build | median lag < 30 days and < 25% of configs lag more than 90 days |
+| Between     | anything else                                                   |
+
+**Scope.** This applies to the next collection run that is independent of the first, not to the first run. For the first run (collected 2026-10-10), this row is recorded as undetermined and counts toward neither side.
+
+**Known limits** (S-9). Lag cannot tell a stale config from a finished one that needs no edits. `pushed_at` counts pushes to any branch, so a repository can look fresher than its default branch is, which lengthens the measured lag. Configs written by an installer (see the exploratory Laravel breakdown in the first-run findings) may change only when the tool is re-run.
