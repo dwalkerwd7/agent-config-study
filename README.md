@@ -3,10 +3,11 @@
 A GitHub App that inventories AI coding-agent configuration across an organization's
 repositories and reports when it changes.
 
-**Status: scaffold only.** The monorepo, services and build pipeline described under
-[Install](#install) work today. None of the scanning, inventory or drift behaviour below is
-implemented yet, and whether it gets built at all depends on the
-[corpus study](#corpus-study). See [Status](#status).
+**Status: parked.** The [corpus study](#corpus-study) that decided whether to build it came
+out short of its pre-registered build criteria in two independent runs, so the product is not
+being built. The monorepo, services and build pipeline described under [Install](#install)
+work, but none of the scanning, inventory or drift behaviour below is implemented. The rest of
+this README describes the product as it was planned. See [Status](#status).
 
 ## The problem
 
@@ -113,8 +114,8 @@ API with health and readiness checks, a BullMQ queue and worker, a Prisma schema
 Auth.js tables, GitHub OAuth sign-in in the Next.js app, an MCP server with a placeholder tool,
 and parsing and hashing helpers in `packages/core`.
 
-The corpus collector exists as code in `apps/collector`, but it has not been run and no data
-has been collected yet.
+The corpus collector in `apps/collector` has run twice, and the analysis of both runs is in
+`study/`. The project is parked, so none of the items below is planned.
 
 Not built yet:
 
@@ -146,12 +147,15 @@ rubric grounded in what actually appears in the wild, rather than in what seems 
   the decision criteria, and the priors recorded in advance to check calibration against
 - [study/rules.md](study/rules.md) — what may and may not be published, redaction
   at collection, and disclosure handling
-- [study/results.md](study/results.md) — findings and the recorded decision, once
-  the study has run
+- [study/results.md](study/results.md) — findings and the recorded decision
+- [study/runs.md](study/runs.md) — what changed from one collection run to the next
 
-**Status: not started.** No data has been collected and there are no findings. Any figure that
-reaches this README will state N and its collection date, be scoped to the corpus rather than
-projected onto GitHub as a whole, and trace to analysis output instead of being typed by hand.
+**Status: decided, park.** Two independent runs, both collected 2026-10-10 and both partial
+(stopped on the 5,000-file cap), passed the gate but put only two and then one of the five
+signals on the build side, short of the three required. Unpinned package references were the
+one strong signal in both runs: 91.9% of 518 in run 1 and 85.6% of 500 in run 2, counted in
+deduplicated MCP configs within each corpus. The figures, method and biases are in
+[study/results.md](study/results.md).
 
 The raw corpus is never committed — it stays in `study/corpus/`, which is gitignored. Analysis
 output goes to `study/output/`, which is committed so that published numbers have a source.
