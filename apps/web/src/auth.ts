@@ -9,7 +9,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      // `read:org` is what lets driftmark enumerate the org's repositories.
+      // `read:org` is what lets the app enumerate the org's repositories.
       authorization: { params: { scope: 'read:user user:email read:org' } },
     }),
   ],

@@ -44,7 +44,7 @@ and the reason matters more than the rule:
   breaks `next build`, which evaluates route modules to collect page data with
   no `DATABASE_URL` set.
 - **A BullMQ queue name cannot contain `:`.** BullMQ 6 throws at construction.
-  Use `driftmark-<name>`.
+  Use `agent-config-study-<name>`.
 - **`NODE_ENV` stays out of `.env.example`.** Setting it to `development` breaks
   `next build` — the build renders with a dev React build and crashes on the
   built-in error page. Its absence is deliberate; adding it back is a blocker.
