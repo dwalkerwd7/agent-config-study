@@ -21,7 +21,7 @@ export function startWorker(): Worker<ExampleJob> {
   return worker;
 }
 
-// Run directly with `pnpm --filter @driftmark/api worker`.
+// Run directly with `pnpm --filter @agent-config-study/api worker`.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const worker = startWorker();
   logger.info('worker listening');

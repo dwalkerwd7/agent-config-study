@@ -21,7 +21,7 @@ export function buildMcpServer(): McpServer {
   return server;
 }
 
-// Run directly with `pnpm --filter @driftmark/api mcp`.
+// Run directly with `pnpm --filter @agent-config-study/api mcp`.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = buildMcpServer();
   await server.connect(new StdioServerTransport());

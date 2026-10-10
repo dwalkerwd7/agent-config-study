@@ -1,5 +1,5 @@
 {
-  "name": "driftmark",
+  "name": "agent-config-study",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,10 @@
     "lint:code": "eslint .",
     "collect": ".claude/scripts/collect.sh",
     "format": "prettier --write .",
-    "db:generate": "pnpm --filter @driftmark/db generate",
-    "db:migrate": "pnpm --filter @driftmark/db migrate",
-    "db:push": "pnpm --filter @driftmark/db push",
-    "db:studio": "pnpm --filter @driftmark/db studio",
+    "db:generate": "pnpm --filter @agent-config-study/db generate",
+    "db:migrate": "pnpm --filter @agent-config-study/db migrate",
+    "db:push": "pnpm --filter @agent-config-study/db push",
+    "db:studio": "pnpm --filter @agent-config-study/db studio",
     "services:up": "docker compose up -d",
     "services:down": "docker compose down"
   },

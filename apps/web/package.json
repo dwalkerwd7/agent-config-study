@@ -1,5 +1,5 @@
 {
-  "name": "@driftmark/web",
+  "name": "@agent-config-study/web",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
-    "@driftmark/db": "workspace:*",
+    "@agent-config-study/db": "workspace:*",
     "next": "^16.3.8",
     "next-auth": "5.0.0-beta.32",
     "react": "^19.3.0",

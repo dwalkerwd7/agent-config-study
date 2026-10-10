@@ -20,4 +20,4 @@ command -v op >/dev/null || {
 }
 
 cd "$root"
-exec op run --env-file="$env_file" -- pnpm --filter @driftmark/collector collect "$@"
+exec op run --env-file="$env_file" -- pnpm --filter @agent-config-study/collector collect "$@"
