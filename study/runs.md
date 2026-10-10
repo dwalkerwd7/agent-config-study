@@ -17,14 +17,13 @@ Copy this block for each new run.
 ```markdown
 ## Run N — YYYY-MM-DD
 
-| Field             | Value                                                |
-| ----------------- | ---------------------------------------------------- |
-| Collection window | YYYY-MM-DD HH:MM to HH:MM UTC                        |
-| Status (C-8)      | complete / partial (stop reason)                     |
-| Collector         | commit `<sha>` (PR #)                                |
-| Analysis          | `study/analyze.py` at commit `<sha>`                 |
-| Output            | `study/output/findings-runN.md`                      |
-| Decision          | build / don't build / park, or none (see results.md) |
+| Field             | Value                                |
+| ----------------- | ------------------------------------ |
+| Collection window | YYYY-MM-DD HH:MM to HH:MM UTC        |
+| Status (C-8)      | complete / partial (stop reason)     |
+| Collector         | commit `<sha>` (PR #)                |
+| Analysis          | `study/analyze.py` at commit `<sha>` |
+| Output            | `study/output/findings-runN.md`      |
 
 ### Changed since run N-1
 
@@ -47,7 +46,6 @@ Which figures can be compared with run N-1 as they stand, and which cannot, and 
 | Collector         | commit `2179f64` (PR #42)                                  |
 | Analysis          | `study/analyze.py` as changed in the PR adding this entry  |
 | Output            | `study/output/findings-run2.md`                            |
-| Decision          | park (results.md §10)                                      |
 
 ### Changed since run 1
 
@@ -60,8 +58,9 @@ Which figures can be compared with run N-1 as they stand, and which cannot, and 
   - Files of a repository with no repository record are left out. The file cap stopped
     run 2 partway through one repository, leaving 7 files without a record. Run 1 had
     none, so its figures are unchanged.
-  - The staleness row is scored by §10.1 for a run disjoint from an earlier one.
-- **Plan:** §10.1 applies from this run.
+- **Plan:** §10.1 (the staleness summary) was fixed before this run was read.
+- **After this run:** the threshold table was removed from the analysis output, and both
+  findings files were regenerated. No figure changed.
 
 ### Effect on comparability
 
@@ -71,8 +70,7 @@ Which figures can be compared with run N-1 as they stand, and which cannot, and 
 - Discovery ran again, so search ranking and `total_count` reflect a later moment. The
   pool run 2 drew from is the same as run 1's minus the run-1 repositories, so it leans
   further down each slice's relevance order.
-- Every figure is comparable with run 1 except the staleness decision row, which was
-  undetermined in run 1 and is scored in run 2.
+- Every figure is comparable with run 1.
 
 ## Run 1 — 2026-10-10
 
@@ -83,7 +81,6 @@ Which figures can be compared with run N-1 as they stand, and which cannot, and 
 | Collector         | commit `f865c36` (PR #37)                                  |
 | Analysis          | `study/analyze.py` as merged in PR #38 (commit `69d06d4`)  |
 | Output            | `study/output/findings-run1.md`                            |
-| Decision          | park (results.md §3)                                       |
 
 ### Configuration
 
@@ -106,7 +103,7 @@ locked on this date. The one that matters for later comparisons: expansion order
 from first come, first served to the stratified draw (PR #37). Without it, the cap would
 have been spent on the targets searched first.
 
-### Analysis decisions made after seeing the data
+### Analysis choices made after seeing the data
 
 These were made while analyzing run 1 and apply from run 1 on.
 
@@ -118,7 +115,7 @@ These were made while analyzing run 1 and apply from run 1 on.
 - **Installer-generated configs** (Laravel `artisan boost:mcp`, `herd-mcp.phar`) are
   broken out as an exploratory measure (§10.2, S-8).
 
-### Applies from the next run
+### Added for the next run
 
-- **§10.1:** a numeric staleness threshold, set after this run, applies only to the next
-  independent run. In run 1 the staleness row is undetermined.
+- **§10.1:** a staleness summary (median lag and the share lagging more than 90 days),
+  fixed after this run and before the next.

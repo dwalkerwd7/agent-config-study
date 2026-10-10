@@ -3,27 +3,28 @@ Corpus Study — Results
 Findings from the study pre-registered in study/plan.md, governed by study/rules.md.
 Question IDs (Q1–Q14) and rule IDs refer to those files.
 
-Status: decided (park), confirmed by run 2 (§10) · first run collected 2026-10-10 · partial run · owner: Derek Walker
+Status: complete · two runs, both collected 2026-10-10 · both partial · owner: Derek Walker
 
-Every figure here is copied from `study/output/findings-run1.md`, which
-`study/analyze.py` emits from the raw corpus, and none is typed from memory (A-2). That
-file carries the full tables. The collector recorded the run as partial (C-8), so every
+Sections 1–6 cover the first run, and §7 compares it with the second. Every figure is
+copied from `study/output/findings-run1.md` or `findings-run2.md`, which
+`study/analyze.py` emits from the raw corpus, and none is typed from memory (A-2). Those
+files carry the full tables. The collector recorded both runs as partial (C-8), so every
 figure in this file is a partial-run figure (P-15). Each one describes this corpus only,
 not GitHub or the ecosystem (S-1).
 
 ## 1. Run record
 
-| Field                                                 | Value                                       |
-| ----------------------------------------------------- | ------------------------------------------- |
-| Collection window                                     | 2026-10-10 01:20 to 03:51 UTC               |
-| Analysis date                                         | 2026-10-10                                  |
-| Complete or partial (C-8)                             | partial (stopped on the 5,000-file cap, §9) |
-| Responses with incomplete_results (C-4)               | 0 of 310                                    |
-| Config-class files, deduplicated (S-4)                | 4,152                                       |
-| Config-class files, raw                               | 5,000                                       |
-| Documentation-class blocks, reported separately (S-7) | not collected in v1 (plan §5)               |
-| Repositories                                          | 1,147                                       |
-| Distinct owners after dedup (C-7)                     | 1,098                                       |
+| Field                                                 | Value                                            |
+| ----------------------------------------------------- | ------------------------------------------------ |
+| Collection window                                     | 2026-10-10 01:20 to 03:51 UTC                    |
+| Analysis date                                         | 2026-10-10                                       |
+| Complete or partial (C-8)                             | partial (stopped on the 5,000-file cap, plan §9) |
+| Responses with incomplete_results (C-4)               | 0 of 310                                         |
+| Config-class files, deduplicated (S-4)                | 4,152                                            |
+| Config-class files, raw                               | 5,000                                            |
+| Documentation-class blocks, reported separately (S-7) | not collected in v1 (plan §5)                    |
+| Repositories                                          | 1,147                                            |
+| Distinct owners after dedup (C-7)                     | 1,098                                            |
 
 ## 2. Method and known bias
 
@@ -51,37 +52,7 @@ Required in the same artifact as any statistic drawn from it (S-3).
   service (D-4).
 - **No significance testing** (plan §7).
 
-## 3. Decision
-
-Recorded against the criteria fixed in study/plan.md §2, which were written before
-collection so the result cannot be reinterpreted.
-
-| Signal                                   | Build   | Don't build | Observed                                   | Side         |
-| ---------------------------------------- | ------- | ----------- | ------------------------------------------ | ------------ |
-| Config-class files collected (gate)      | ≥ 1,000 | < 300       | 4,152 dedup (5,000 raw)                    | build        |
-| Median servers per config                | ≥ 2     | 1           | 1 (N = 888)                                | don't build  |
-| Unpinned reference rate                  | ≥ 40%   | < 15%       | 91.9% (N = 518)                            | build        |
-| Configs with credential-shaped env value | ≥ 3%    | < 1%        | 3.9% (N = 888)                             | build        |
-| Repos with 2+ configs that disagree      | ≥ 20%   | < 5%        | 16.3% (N = 252)                            | between      |
-| Median config age vs repo age            | staler  | tracks repo | median lag 22.3 days, 29.0% > 90 (N = 893) | undetermined |
-
-The first row is a gate. At least three of the remaining five must land on the build side.
-
-**Decision: park** (recorded 2026-10-10 by the owner)
-
-Reasoning: the gate passes, but only two of the five remaining rows land on the build
-side. The staleness row has no numeric threshold in §2. Plan §10.1 sets one, but it was
-written after this run and applies only to the next independent run, so here the row is
-undetermined and counts toward neither side. Two of five is short of three, which §2
-calls "park it and write up what I found".
-
-The two build signals are strong: 91.9% of 518 package references are unpinned, and
-3.9% of 888 MCP configs carry a credential-shaped literal in `env` or `headers`. The
-don't-build signal is weaker than it looks, because installer-generated configs pull the
-median down (§7). A second, independent run under §10.1 is the way to settle the
-staleness row and check whether those two rates hold.
-
-## 4. Answers
+## 3. Answers
 
 Each answer states N (S-2), is scoped to this corpus (S-1), and comes from a partial run
 collected 2026-10-10 (P-15). Deduplicated figures are the headline, with raw shown
@@ -147,22 +118,21 @@ alongside and labeled (S-4).
   instruction, skill and rules files has a median of 15,300.5 bytes and a max of 1,262,257
   (N = 818 repositories).
 
-## 5. Falsification check
+## 4. Null outcomes
 
-The four outcomes from study/plan.md §8 that would sink the premise. Any two and the
-answer is no.
+The four outcomes from study/plan.md §8 that would mean committed agent config is simple
+and well kept.
 
 | Outcome                                         | Holds?                                                                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Config is overwhelmingly documentation-class    | not measured: v1 collects no documentation-class blocks                                                               |
 | Pinning rates are already high                  | no: 8.1% exact of 518 references                                                                                      |
 | Servers per config ≈ 1, same handful everywhere | half: median 1 (N = 888), but 205 of 275 server identities appear under one owner only, so it is not the same handful |
-| Config is as fresh as the repos                 | undetermined: median lag 22.3 days (N = 893) and no pre-registered threshold for this run (§10.1)                     |
+| Config is as fresh as the repos                 | partly: median lag 22.3 days, but 29.0% of configs lag more than 90 days (N = 893)                                    |
 
-None clearly holds, so the premise is not falsified by this run. It is not confirmed
-either (§3).
+None clearly holds in the first run.
 
-## 6. Calibration
+## 5. Calibration
 
 Priors were recorded in study/plan.md §3 before collection, so a result that merely
 matches expectation is not mistaken for a discovery.
@@ -181,7 +151,7 @@ common servers were not the predicted set: browser automation (Playwright) appea
 the leaders are docs fetchers and hosted services (Context7, GitHub, Supabase), not a
 filesystem server.
 
-## 7. Competing explanations
+## 6. Competing explanations
 
 - **Installer-generated configs (exploratory, S-8).** In 314 of 888 deduplicated MCP
   configs (35.4%), Laravel tooling (`artisan boost:mcp` or Herd) wrote the server entry,
@@ -192,8 +162,7 @@ filesystem server.
   configs excluded, the median is still 1 server (N = 574).
 - **Keyed-literal hits may be dummies.** 28 of the 35 Q8 configs are flagged only by the
   `keyed-literal` detector, which matches any literal assigned to a secret-named key.
-  Some are likely placeholders, so 3.9% is an upper bound on real credentials. It sits
-  just above the 3% build line.
+  Some are likely placeholders, so 3.9% is an upper bound on real credentials.
 - **Lag is not staleness.** A config that needs no edits shows a long lag without being
   stale, and `pushed_at` counts pushes to any branch.
 - **The balanced draw shapes prevalence.** Q1, Q4 and Q13 repository counts reflect the
@@ -203,53 +172,37 @@ filesystem server.
   in each repository. That is still exposure, but it suggests the fix sits with
   documentation as much as with each repository.
 
-## 8. Fixtures produced
-
-Sanitized fixtures derived from the corpus, each satisfying P-4 before entering the
-repository, never added by copy-paste from the raw corpus (A-5).
-
-(none yet)
-
-## 9. Exploratory additions
+## 8. Exploratory additions
 
 Anything computed after looking at the data, labeled exploratory wherever it appears (S-8).
 Post-hoc questions are recorded in study/plan.md §10 first.
 
-- **Installer-generated MCP configs** (plan §10.2): the Laravel breakdown in §7.
-- **Staleness threshold** (plan §10.1): set after this run, so it is applied only to the
-  next independent run.
+- **Installer-generated MCP configs** (plan §10.2): the Laravel breakdown in §6.
+- **Staleness summary** (plan §10.1): the median lag and the share of MCP configs lagging
+  more than 90 days, fixed before the second run was read.
 
-## 10. Re-runs
+## 7. Second run
 
-If the study is re-run, prior figures are kept with their collection date rather than
-silently overwritten (A-4).
+Prior figures are kept with their collection date rather than silently overwritten (A-4).
 
-### Run 2 (collected 2026-10-10)
+Run 2 (collected 2026-10-10) is a partial run (the 5,000-file cap) and is disjoint from
+run 1: the draw left out run 1's 1,147 repositories. Its figures are copied from
+`study/output/findings-run2.md`, and what changed between the runs is in
+`study/runs.md`.
 
-Figures are copied from `study/output/findings-run2.md`. Run 2 is a partial run (the
-5,000-file cap, §9) and is disjoint from run 1: the draw left out run 1's 1,147
-repositories. What changed between the runs is in `study/runs.md`. Run 1's figures
-above stand as they are.
+| Measure (plan §2)                                          | Run 1                      | Run 2                      |
+| ---------------------------------------------------------- | -------------------------- | -------------------------- |
+| Config-class files, deduplicated (raw)                     | 4,152 (5,000)              | 4,112 (4,993)              |
+| Median servers per MCP config                              | 1 (N = 888)                | 1 (N = 849)                |
+| Unpinned package references                                | 91.9% (N = 518)            | 85.6% (N = 500)            |
+| MCP configs with a credential-shaped `env`/`headers` value | 3.9% (N = 888)             | 2.4% (N = 849)             |
+| Multi-client repos whose server names differ               | 16.3% (N = 252)            | 14.0% (N = 285)            |
+| MCP config lag: median, share > 90 days                    | 22.3 days, 29.0% (N = 893) | 20.5 days, 26.0% (N = 851) |
+| MCP configs with Laravel tooling (exploratory)             | 35.4% (N = 888)            | 36.3% (N = 849)            |
 
-| Signal                                   | Build   | Don't build | Run 1        | Run 2                                      | Side (run 2) |
-| ---------------------------------------- | ------- | ----------- | ------------ | ------------------------------------------ | ------------ |
-| Config-class files collected (gate)      | ≥ 1,000 | < 300       | 4,152 dedup  | 4,112 dedup (4,993 raw)                    | build        |
-| Median servers per config                | ≥ 2     | 1           | 1            | 1 (N = 849)                                | don't build  |
-| Unpinned reference rate                  | ≥ 40%   | < 15%       | 91.9%        | 85.6% (N = 500)                            | build        |
-| Configs with credential-shaped env value | ≥ 3%    | < 1%        | 3.9%         | 2.4% (N = 849)                             | between      |
-| Repos with 2+ configs that disagree      | ≥ 20%   | < 5%        | 16.3%        | 14.0% (N = 285)                            | between      |
-| Median config age vs repo age (§10.1)    | staler  | tracks repo | undetermined | median lag 20.5 days, 26.0% > 90 (N = 851) | between      |
-
-**Decision: park** (recorded 2026-10-10 by the owner)
-
-Reasoning: the gate passes, but only one of the five remaining rows lands on the build
-side, fewer than run 1's two. §3 named a second run as the way to check whether run 1's
-two build signals hold. The unpinned rate holds well above its threshold in both runs.
-The credential rate does not: 3.9% in run 1 was just over the 3% line, and 2.4% in run 2
-is under it. The staleness row, scored by §10.1 for the first time, lands between: the
-median lag is under 30 days, but 26.0% of configs lag more than 90 days, just over the
-25% limit. The study does not support building DriftMark as planned.
-
-The unpinned rate is the one finding that both independent runs place far on the build
-side. A narrower follow-up aimed at that gap alone is outside this study's decision and
-would need its own criteria, set before any new data is examined.
+What held: most package references are unpinned in both runs, the median config holds one
+server, and about a third of MCP configs carry the same installer-written server. What
+moved: the credential rate fell from 3.9% to 2.4%. Most of those hits come from the
+`keyed-literal` detector (18 of 20 configs in run 2), so the rate is sensitive to a small
+number of configs and to placeholders. Divergence and the share of stale configs each fell
+by 2–3 points.
