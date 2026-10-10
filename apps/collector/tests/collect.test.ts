@@ -17,8 +17,9 @@ import type {
   TreeEntry,
 } from '../src/github.js';
 import { createLogger } from '../src/logger.js';
-import { buildSlices, type Slice } from '../src/queries.js';
+import { SIZE_BANDS, buildSlices, type Slice } from '../src/queries.js';
 import { CorpusStore } from '../src/store.js';
+import { matchTarget } from '../src/targets.js';
 import { FAKE } from './credential-fixtures.js';
 
 // No test here reaches the network or runs the CLI entry point: every GitHub
@@ -26,10 +27,17 @@ import { FAKE } from './credential-fixtures.js';
 
 const SALT = 'collect-test-salt-0123456789abcdef0123456789';
 const SLICES = buildSlices();
-function firstSlice(pattern: string): Slice {
-  const slice = SLICES.find((candidate) => candidate.target.pattern === pattern);
-  if (slice === undefined) throw new Error(`no slice for ${pattern}`);
+/** The slice for a target pattern and an index into `SIZE_BANDS`. */
+function sliceOf(pattern: string, band = 0): Slice {
+  const slice = SLICES.find(
+    (candidate) =>
+      candidate.target.pattern === pattern && candidate.id.endsWith(`@${SIZE_BANDS[band] ?? ''}`),
+  );
+  if (slice === undefined) throw new Error(`no slice for ${pattern} band ${String(band)}`);
   return slice;
+}
+function firstSlice(pattern: string): Slice {
+  return sliceOf(pattern, 0);
 }
 const MCP_SLICE = firstSlice('.mcp.json');
 const CLAUDE_SLICE = firstSlice('CLAUDE.md');
@@ -187,12 +195,35 @@ function logger() {
   return createLogger('debug', { write: (line: string) => void logLines.push(line) });
 }
 
-function run(github: FakeGitHub, options: CollectOptions = {}) {
-  return collect({ github, store: new CorpusStore(root), salt: SALT, logger: logger() }, options);
+function run(github: FakeGitHub, options: CollectOptions = {}, at = root) {
+  return collect({ github, store: new CorpusStore(at), salt: SALT, logger: logger() }, options);
 }
 
-function records(stream: string): Record<string, unknown>[] {
-  const path = join(root, `${stream}.jsonl`);
+/** Records the sampling seed a run will reuse, as the first run would have. */
+function seedStore(seed: string, at = root): void {
+  new CorpusStore(at).appendSampling({
+    seed,
+    file_cap: 5000,
+    method: 'stratified-v1',
+    created_at: '2026-09-01T00:00:00.000Z',
+  });
+}
+
+/**
+ * A seed whose draw order puts `repos` in the order given, for tests where
+ * they share one stratum and the order matters. It searches seeds rather than
+ * fixing one, so the test does not depend on a hard-coded hash.
+ */
+function seedOrdering(repos: string[]): string {
+  for (let i = 0; ; i++) {
+    const seed = sha256(`test-seed-${String(i)}`);
+    const keys = repos.map((repo) => sha256(`${seed}:${repo}`));
+    if (keys.every((key, j) => j === 0 || (keys[j - 1] ?? '') < key)) return seed;
+  }
+}
+
+function records(stream: string, at = root): Record<string, unknown>[] {
+  const path = join(at, `${stream}.jsonl`);
   if (!existsSync(path)) return [];
   return readFileSync(path, 'utf8')
     .split('\n')
@@ -325,6 +356,7 @@ describe('collect: redaction before write (C-1, C-2)', () => {
         head_commit: fake.head.sha,
         tree_truncated: false,
         slice_ids: [MCP_SLICE.id],
+        drawn_slice: MCP_SLICE.id,
       },
     ]);
   });
@@ -363,6 +395,7 @@ describe('collect: discovery paging', () => {
 describe('collect: resume (C-8)', () => {
   it('makes no API calls and writes no duplicates when rerun over completed data', async () => {
     const github = world();
+    seedStore(seedOrdering(['octo/demo', 'acme/tools']));
     expect((await run(github)).status).toBe('complete');
     const before = {
       responses: records('responses'),
@@ -393,6 +426,7 @@ describe('collect: resume (C-8)', () => {
 describe('collect: stop conditions', () => {
   it('writes partial on --max-repos, then a rerun finishes only the rest', async () => {
     const github = world();
+    seedStore(seedOrdering(['octo/demo', 'acme/tools']));
 
     const first = await run(github, { maxRepos: 1 });
     expect(first).toMatchObject({ status: 'partial', stop_reason: 'max-repos', repos_expanded: 1 });
@@ -429,6 +463,7 @@ describe('collect: stop conditions', () => {
 
   it('stops mid-repo on abort, then resumes without recording a file twice', async () => {
     const github = world();
+    seedStore(seedOrdering(['octo/demo', 'acme/tools']));
     const controller = new AbortController();
     const firstBlob = github.repos
       .get('octo/demo')
@@ -492,6 +527,296 @@ describe('collect: stop conditions', () => {
   });
 });
 
+type RepoFiles = Record<string, Record<string, string>>;
+
+/** `count` repos named `<prefix>/rN`, each holding the same `files` (path → content). */
+function reposOf(prefix: string, count: number, files: Record<string, string>): RepoFiles {
+  return Object.fromEntries(
+    Array.from({ length: count }, (_, i) => [`${prefix}/r${String(i)}`, files] as const),
+  );
+}
+
+/**
+ * Puts `repos` on page 1 of the slice for `pattern` and `band`, one hit each,
+ * with `total` as the slice's `total_count`, and adds each repo to the fake.
+ */
+function addStratum(
+  github: FakeGitHub,
+  pattern: string,
+  repos: RepoFiles,
+  options: { band?: number; total?: number } = {},
+): Slice {
+  const slice = sliceOf(pattern, options.band ?? 0);
+  const names = Object.keys(repos);
+  github.setPage(slice.query, 1, {
+    total_count: options.total ?? names.length,
+    incomplete_results: false,
+    items: names.map((name) => hit(name, Object.keys(repos[name] ?? {})[0] ?? pattern)),
+  });
+  for (const [name, files] of Object.entries(repos)) addRepo(github, name, files);
+  return slice;
+}
+
+/** The target pattern of a slice id (`<pattern>@<band>`). */
+function targetOf(sliceId: unknown): string {
+  return String(sliceId).split('@')[0] ?? '';
+}
+
+/** Files recorded per target pattern. */
+function filesPerTarget(at = root): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const record of records('files', at)) {
+    const target = matchTarget(String(record['path']))?.target ?? 'none';
+    counts[target] = (counts[target] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** Every repo, file and redaction record, minus retrieval timestamps, for comparing two corpora. */
+function corpusState(at: string) {
+  return {
+    repos: records('repos', at),
+    files: records('files', at).map((record) => ({ ...record, retrieved_at: null })),
+    redactions: records('redactions', at),
+  };
+}
+
+const SEED_A = 'a'.repeat(64);
+const SEED_B = 'b'.repeat(64);
+const RULES = { '.cursor/rules/a.mdc': 'a', '.cursor/rules/b.mdc': 'b' };
+
+describe('collect: stratified expansion order', () => {
+  it('balances files across targets while every target has repos left', async () => {
+    const github = new FakeGitHub();
+    const pools = {
+      '.mcp.json': 12,
+      '.cursor/rules/**': 12,
+      'CLAUDE.md': 4,
+    };
+    addStratum(github, '.mcp.json', reposOf('mcp', pools['.mcp.json'], { '.mcp.json': '{}' }));
+    addStratum(github, '.cursor/rules/**', reposOf('rules', pools['.cursor/rules/**'], RULES));
+    addStratum(github, 'CLAUDE.md', reposOf('claude', pools['CLAUDE.md'], { 'CLAUDE.md': '#' }));
+    seedStore(SEED_A);
+
+    const result = await run(github);
+
+    expect(result).toMatchObject({ status: 'complete', stop_reason: 'exhausted' });
+    const order = records('repos').map((record) => targetOf(record['drawn_slice']));
+    expect(order).toHaveLength(28);
+    // All three start at zero, so the first draw goes to the first in TARGETS order.
+    expect(order[0]).toBe('.mcp.json');
+    const files: Record<string, number> = { '.mcp.json': 0, '.cursor/rules/**': 0, 'CLAUDE.md': 0 };
+    const drawn: Record<string, number> = { '.mcp.json': 0, '.cursor/rules/**': 0, 'CLAUDE.md': 0 };
+    const perRepo: Record<string, number> = {
+      '.mcp.json': 1,
+      '.cursor/rules/**': 2,
+      'CLAUDE.md': 1,
+    };
+    for (const target of order) {
+      const allLeft = Object.entries(pools).every(
+        ([pattern, size]) => (drawn[pattern] ?? 0) < size,
+      );
+      drawn[target] = (drawn[target] ?? 0) + 1;
+      files[target] = (files[target] ?? 0) + (perRepo[target] ?? 0);
+      // The largest repo holds 2 files: counts never drift further apart than that.
+      if (allLeft)
+        expect(
+          Math.max(...Object.values(files)) - Math.min(...Object.values(files)),
+        ).toBeLessThanOrEqual(2);
+    }
+    expect(filesPerTarget()).toEqual({ '.mcp.json': 12, '.cursor/rules/**': 24, 'CLAUDE.md': 4 });
+  });
+
+  it('passes the unused share of a target whose pool runs out to the others', async () => {
+    const github = new FakeGitHub();
+    addStratum(github, '.junie/mcp/mcp.json', reposOf('junie', 2, { '.junie/mcp/mcp.json': '{}' }));
+    addStratum(github, 'CLAUDE.md', reposOf('claude', 10, { 'CLAUDE.md': '#' }));
+    addStratum(github, 'AGENTS.md', reposOf('agents', 10, { 'AGENTS.md': '#' }));
+    seedStore(SEED_A);
+
+    const result = await run(github, { fileCap: 12 });
+
+    expect(result).toMatchObject({ status: 'partial', stop_reason: 'file-cap', files_written: 12 });
+    expect(filesPerTarget()).toEqual({ '.junie/mcp/mcp.json': 2, 'CLAUDE.md': 5, 'AGENTS.md': 5 });
+  });
+
+  it('counts a file reached through the tree toward its own target, not the drawing one', async () => {
+    const github = new FakeGitHub();
+    addStratum(github, '.mcp.json', reposOf('mcp', 3, { '.mcp.json': '{}', 'AGENTS.md': '#' }));
+    addStratum(github, 'AGENTS.md', reposOf('agents', 3, { 'AGENTS.md': '#' }));
+    seedStore(SEED_A);
+
+    await run(github);
+
+    // Each .mcp.json repo also adds an AGENTS.md file, so AGENTS.md never falls
+    // behind while .mcp.json has repos, and the ties go to .mcp.json.
+    expect(records('repos').map((record) => targetOf(record['drawn_slice']))).toEqual([
+      '.mcp.json',
+      '.mcp.json',
+      '.mcp.json',
+      'AGENTS.md',
+      'AGENTS.md',
+      'AGENTS.md',
+    ]);
+  });
+
+  it('allocates draws within a target in proportion to total_count', async () => {
+    const github = new FakeGitHub();
+    const big = addStratum(github, 'CLAUDE.md', reposOf('small-files', 40, { 'CLAUDE.md': '#' }), {
+      band: 0,
+      total: 900,
+    });
+    const small = addStratum(
+      github,
+      'CLAUDE.md',
+      reposOf('large-files', 40, { 'CLAUDE.md': '#' }),
+      {
+        band: 2,
+        total: 100,
+      },
+    );
+    seedStore(SEED_A);
+
+    const result = await run(github, { maxRepos: 20 });
+
+    expect(result).toMatchObject({ stop_reason: 'max-repos', repos_expanded: 20 });
+    const drawn = records('repos').map((record) => record['drawn_slice']);
+    expect(drawn.filter((id) => id === big.id)).toHaveLength(18);
+    expect(drawn.filter((id) => id === small.id)).toHaveLength(2);
+    // Each record names the stratum it was drawn for among the slices that found it.
+    for (const record of records('repos')) {
+      expect(record['slice_ids']).toContain(record['drawn_slice']);
+    }
+  });
+
+  it('draws a repo found by several slices once, for the first stratum to reach it', async () => {
+    const github = new FakeGitHub();
+    const shared = { 'shared/both': { 'CLAUDE.md': '#', 'AGENTS.md': '#' } };
+    addStratum(github, 'CLAUDE.md', { ...shared, ...reposOf('claude', 2, { 'CLAUDE.md': '#' }) });
+    addStratum(github, 'AGENTS.md', { ...shared, ...reposOf('agents', 2, { 'AGENTS.md': '#' }) });
+    seedStore(SEED_A);
+
+    const result = await run(github);
+
+    expect(result).toMatchObject({ status: 'complete', repos_expanded: 5 });
+    const names = records('repos').map((record) => record['full_name']);
+    expect(names.filter((name) => name === 'shared/both')).toHaveLength(1);
+    expect(github.calls.filter((call) => call === 'repo shared/both')).toHaveLength(1);
+  });
+
+  it('draws the same order for the same seed and a different one for another', async () => {
+    const build = () => {
+      const github = new FakeGitHub();
+      addStratum(github, 'CLAUDE.md', reposOf('claude', 15, { 'CLAUDE.md': '#' }));
+      addStratum(github, 'AGENTS.md', reposOf('agents', 15, { 'AGENTS.md': '#' }));
+      return github;
+    };
+    const order = async (seed: string, name: string) => {
+      const at = join(base, name);
+      seedStore(seed, at);
+      await run(build(), {}, at);
+      return records('repos', at).map((record) => record['full_name']);
+    };
+
+    const first = await order(SEED_A, 'a1');
+    expect(await order(SEED_A, 'a2')).toEqual(first);
+    const other = await order(SEED_B, 'b');
+    expect(other).not.toEqual(first);
+    expect([...other].sort()).toEqual([...first].sort());
+  });
+
+  it('stops at exactly the file cap, mid-repo if need be', async () => {
+    const github = new FakeGitHub();
+    addStratum(github, '.cursor/rules/**', reposOf('rules', 5, RULES));
+    addStratum(github, '.mcp.json', reposOf('mcp', 5, { '.mcp.json': '{}', 'CLAUDE.md': '#' }));
+    seedStore(SEED_A);
+
+    const result = await run(github, { fileCap: 7 });
+
+    expect(result).toMatchObject({ status: 'partial', stop_reason: 'file-cap', files_written: 7 });
+    expect(records('files')).toHaveLength(7);
+  });
+});
+
+describe('collect: sampling seed and resume', () => {
+  /** Three targets, repos of one to three files, some found by two slices. */
+  function sampleWorld(): FakeGitHub {
+    const github = new FakeGitHub();
+    addStratum(github, '.mcp.json', reposOf('mcp', 6, { '.mcp.json': '{}', 'CLAUDE.md': '#' }));
+    addStratum(github, '.mcp.json', reposOf('mcp-big', 3, { '.mcp.json': '{"a":1}' }), {
+      band: 1,
+      total: 30,
+    });
+    addStratum(github, '.cursor/rules/**', reposOf('rules', 6, RULES));
+    addStratum(github, 'CLAUDE.md', reposOf('claude', 8, { 'CLAUDE.md': '#', 'AGENTS.md': '#' }));
+    return github;
+  }
+
+  it('records a fresh seed before expanding anything, and reuses it after', async () => {
+    const github = sampleWorld();
+    let sampledBeforeExpansion: boolean | undefined;
+    const getRepo = github.getRepo.bind(github);
+    github.getRepo = (owner, repo) => {
+      sampledBeforeExpansion ??= records('sampling').length === 1;
+      return getRepo(owner, repo);
+    };
+
+    await run(github, { maxRepos: 2, fileCap: 20 });
+
+    expect(sampledBeforeExpansion).toBe(true);
+    const [sampling, ...rest] = records('sampling');
+    expect(rest).toEqual([]);
+    expect(sampling).toEqual({
+      seed: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown,
+      file_cap: 20,
+      method: 'stratified-v1',
+      created_at: expect.any(String) as unknown,
+    });
+
+    // Resumed twice more, the seed is read back rather than drawn again, and
+    // the result matches an uninterrupted run with that seed.
+    await run(github, { maxRepos: 3, fileCap: 20 });
+    await run(github, { fileCap: 20 });
+    expect(records('sampling')).toEqual([sampling]);
+
+    const fresh = join(base, 'fresh');
+    seedStore(String(sampling?.['seed']), fresh);
+    await run(github, { fileCap: 20 }, fresh);
+    expect(corpusState(root)).toEqual(corpusState(fresh));
+  });
+
+  it('ends a resumed run with the same repos and files as an uninterrupted one', async () => {
+    // One fake for both corpora, so commit and blob SHAs match.
+    const github = sampleWorld();
+    const whole = join(base, 'whole');
+    seedStore(SEED_A, whole);
+    const uninterrupted = await run(github, { fileCap: 25 }, whole);
+    expect(uninterrupted).toMatchObject({ stop_reason: 'file-cap', files_written: 25 });
+
+    seedStore(SEED_A);
+    expect(await run(github, { maxRepos: 3, fileCap: 25 })).toMatchObject({
+      stop_reason: 'max-repos',
+    });
+    // Abort partway through a repo: the next run resumes it at its position.
+    const controller = new AbortController();
+    let blobs = 0;
+    github.onBlob = () => {
+      blobs++;
+      if (blobs === 4) controller.abort();
+    };
+    expect(await run(github, { signal: controller.signal, fileCap: 25 })).toMatchObject({
+      stop_reason: 'aborted',
+    });
+    github.onBlob = () => {};
+    expect(await run(github, { fileCap: 15 })).toMatchObject({ stop_reason: 'file-cap' });
+    expect(records('files')).toHaveLength(15);
+    expect(await run(github, { fileCap: 25 })).toMatchObject({ stop_reason: 'file-cap' });
+
+    expect(corpusState(root)).toEqual(corpusState(whole));
+    expect(records('sampling')).toEqual(records('sampling', whole));
+  });
+});
+
 describe('collect: forks and private repos (C-6, P-14)', () => {
   it('never expands a fork or private repo from search, and records nothing about it', async () => {
     const github = new FakeGitHub();
@@ -522,9 +847,9 @@ describe('collect: forks and private repos (C-6, P-14)', () => {
     const result = await run(github);
 
     expect(result).toMatchObject({ status: 'complete', repos_skipped: 2, files_written: 0 });
-    expect(github.calls.filter((call) => !call.startsWith('search '))).toEqual([
-      'repo turned/private',
+    expect(github.calls.filter((call) => !call.startsWith('search ')).sort()).toEqual([
       'repo turned/fork',
+      'repo turned/private',
     ]);
     expect(records('repos')).toEqual([]);
     expect(records('files')).toEqual([]);

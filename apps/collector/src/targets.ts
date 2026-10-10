@@ -27,6 +27,8 @@ export interface TargetMatch {
   class: 'config';
   kind: TargetKind;
   client: TargetClient;
+  /** The pattern that matched, which names the target a file counts toward when sampling. */
+  target: Target['pattern'];
 }
 
 const COMPILED = TARGETS.map((target) => ({ target, segments: target.pattern.split('/') }));
@@ -45,7 +47,7 @@ export function matchTarget(path: string): TargetMatch | null {
   if (segments.some((segment) => segment === '' || segment === '.')) return null;
   for (const { target, segments: pattern } of COMPILED) {
     if (matchSegments(pattern, 0, segments, 0)) {
-      return { class: 'config', kind: target.kind, client: target.client };
+      return { class: 'config', kind: target.kind, client: target.client, target: target.pattern };
     }
   }
   return null;
