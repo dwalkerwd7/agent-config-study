@@ -12,7 +12,7 @@ The study asks how these files are written and maintained:
 - Whether one repository's configs for different clients agree.
 - How stale configs are compared with the rest of the repository.
 
-The questions, the collection method and the decision criteria were fixed before any data
+The questions, the collection method and the headline measures were fixed before any data
 was collected, so the results could not be reinterpreted afterwards.
 
 ## Findings

@@ -4,31 +4,29 @@ Pre-registered before collection. Governed by study/rules.md; rule IDs below ref
 
 Anything added to this document after the first collection run is recorded in §10 and labeled exploratory wherever it appears (S-8).
 
-Status: draft v1 · locked on: 2026-10-10 (first run) · owner: Derek Walker
+Status: v1 · locked on: 2026-10-10 (first run) · owner: Derek Walker
+
+Revised after both runs to describe the study on its own terms. The questions, population,
+collection method, measures and priors are unchanged from the locked version.
 
 ## 1. Why this study exists
 
-Two purposes, in priority order.
+To measure how AI coding-agent configuration committed to public repositories is written and maintained: how much there is, what it references, whether it is pinned, whether it carries credentials, whether a repository's configs for different clients agree, and how stale it gets. Frequency data from real repositories says more about these files than intuition about what seems alarming.
 
-1. Decide whether to build driftmark. If committed agent configuration is rare, clean, or static, the product has no basis and the decision is no.
-2. Produce test fixtures and an evidence-based severity rubric. Frequency data tells me which checks are worth writing.
+If the data is boring, the correct output is a short honest note.
 
-A publishable write-up is a byproduct, not a goal. If the data is boring, the correct output is a short honest note and a decision not to build.
+## 2. Headline measures
 
-## 2. Decision criteria
+Fixed before collection, so the measures that lead the write-up could not be chosen after seeing the data.
 
-Written down now so the result cannot be reinterpreted later.
-
-| Signal                                        | Build                 | Don't build |
-| --------------------------------------------- | --------------------- | ----------- |
-| Config-class files collected                  | ≥ 1,000               | < 300       |
-| Median servers per config                     | ≥ 2                   | 1           |
-| Unpinned reference rate                       | ≥ 40%                 | < 15%       |
-| Configs with a credential-shaped value in env | ≥ 3%                  | < 1%        |
-| Repos with 2+ client configs that disagree    | ≥ 20% of that subset  | < 5%        |
-| Median config age vs repo age                 | config notably staler | tracks repo |
-
-Mixed results are the likely outcome. The rule: the first row is a gate, and at least three of the remaining five must land on the build side. Anything else means park it and write up what I found.
+| Measure                                       | Question |
+| --------------------------------------------- | -------- |
+| Config-class files collected                  | Q1       |
+| Median servers per config                     | Q2       |
+| Unpinned reference rate                       | Q6       |
+| Configs with a credential-shaped value in env | Q8       |
+| Repos with 2+ client configs that disagree    | Q10      |
+| Config age vs repo age                        | Q11      |
 
 ## 3. Priors
 
@@ -139,16 +137,14 @@ Confirmatory. Each is answerable from the collected fields alone.
 - Partial runs excluded from headline figures or labeled partial (P-15).
 - Every published number emitted by the analysis script, never transcribed (A-2).
 
-## 8. What would falsify the premise
+## 8. Null outcomes
 
-Stated plainly so I can't dodge it:
+Results that would mean committed agent config is simple and well kept, stated in advance so they are reported if they appear:
 
-- Config files are overwhelmingly documentation-class, meaning almost nobody commits real config. The org-wide inventory has nothing to inventory.
-- Pinning rates are already high, meaning the ecosystem solved this without tooling.
-- Servers per config is ~1 and it's the same handful of first-party servers everywhere. No sprawl, no inventory problem.
-- Config files are as fresh as the repos, meaning they're actively maintained and drift is not going unnoticed.
-
-Any two of these and the answer is no.
+- Config files are overwhelmingly documentation-class, meaning almost nobody commits real config.
+- Pinning rates are already high.
+- Servers per config is ~1 and it's the same handful of first-party servers everywhere.
+- Config files are as fresh as the repos, meaning they're actively maintained.
 
 ## 9. Stop conditions
 
@@ -156,32 +152,22 @@ Any two of these and the answer is no.
 - Analysis stops when Q1–Q14 are answered. New questions go to §10, not into this run.
 - Total budget: 3 weeks wall-clock. At the deadline I write up whatever exists.
 
-Deliverables at stop: answers to Q1–Q14, a decision recorded against §2, a sanitized fixture set for the parser (A-5, P-4), and a draft write-up.
+Deliverables at stop: answers to Q1–Q14, the headline measures in §2, a check of the priors in §3, and a write-up.
 
 ## 10. Post-hoc additions
 
 Anything here was added after seeing data and is labeled exploratory in every artifact it appears in (S-8).
 
-### 10.1 Staleness threshold for the §2 decision row (added 2026-10-10)
+### 10.1 Staleness summary (added 2026-10-10)
 
-**Why.** The §2 row "Median config age vs repo age" names no number ("config notably staler" vs "tracks repo"), so it cannot be scored mechanically. After the first run, that row decides the outcome: the other four rows give two build, one don't-build and one in between. A threshold chosen while looking at the result is exactly what §2 exists to prevent, so it is set here and applied only to data not yet collected.
+**Why.** The §2 measure "Config age vs repo age" names no summary statistic, so the write-up needs one fixed before it is read against a second run.
 
-**Measure.** For each deduplicated MCP config (C-7) with a known last commit, the lag in days between the last commit touching the file and the repository's `pushed_at` at collection, floored at 0. The paired lag is the measure. The difference between the median config age and the median repository age is not: those are two separate distributions, not a comparison within each repository.
+**Measure.** For each deduplicated MCP config (C-7) with a known last commit, the lag in days between the last commit touching the file and the repository's `pushed_at` at collection, floored at 0. Reported as the median lag and the share of configs lagging more than 90 days. The paired lag is the measure. The difference between the median config age and the median repository age is not: those are two separate distributions, not a comparison within each repository.
 
-**Threshold.**
-
-| Side        | Condition                                                       |
-| ----------- | --------------------------------------------------------------- |
-| Build       | median lag ≥ 90 days, or ≥ 50% of configs lag more than 90 days |
-| Don't build | median lag < 30 days and < 25% of configs lag more than 90 days |
-| Between     | anything else                                                   |
-
-**Scope.** This applies to the next collection run that is independent of the first, not to the first run. For the first run (collected 2026-10-10), this row is recorded as undetermined and counts toward neither side.
-
-**Known limits** (S-9). Lag cannot tell a stale config from a finished one that needs no edits. `pushed_at` counts pushes to any branch, so a repository can look fresher than its default branch is, which lengthens the measured lag. Configs written by an installer (see the exploratory Laravel breakdown in the first-run findings) may change only when the tool is re-run.
+**Known limits** (S-9). Lag cannot tell a stale config from a finished one that needs no edits. `pushed_at` counts pushes to any branch, so a repository can look fresher than its default branch is, which lengthens the measured lag. Configs written by an installer (see §10.2) may change only when the tool is re-run.
 
 ### 10.2 Installer-generated MCP configs (added 2026-10-10)
 
 **Why.** In the first run, `php` dominated the local-path entries in Q5. Most turned out to be `artisan boost:mcp`, which the Laravel Boost package writes into each detected client's MCP config (alongside Herd's `herd-mcp.phar` where Herd is present). Configs written by an installer are a competing explanation for Q2's median and for the agreement measured by Q10 (S-9).
 
-**Measure.** The share of deduplicated MCP server entries and configs whose command runs `artisan boost:mcp` or `herd-mcp.phar`, with the share broken down by target, plus servers per config with those configs excluded. Exploratory in every artifact (S-8). It does not enter the §2 decision.
+**Measure.** The share of deduplicated MCP server entries and configs whose command runs `artisan boost:mcp` or `herd-mcp.phar`, with the share broken down by target, plus servers per config with those configs excluded. Exploratory in every artifact (S-8). It is reported alongside the §2 measures, not in place of them.
