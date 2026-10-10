@@ -3,7 +3,7 @@ Corpus Study — Results
 Findings from the study pre-registered in study/plan.md, governed by study/rules.md.
 Question IDs (Q1–Q14) and rule IDs refer to those files.
 
-Status: decided (park) · first run collected 2026-10-10 · partial run · owner: Derek Walker
+Status: decided (park), confirmed by run 2 (§10) · first run collected 2026-10-10 · partial run · owner: Derek Walker
 
 Every figure here is copied from `study/output/findings-run1.md`, which
 `study/analyze.py` emits from the raw corpus, and none is typed from memory (A-2). That
@@ -224,4 +224,32 @@ Post-hoc questions are recorded in study/plan.md §10 first.
 If the study is re-run, prior figures are kept with their collection date rather than
 silently overwritten (A-4).
 
-(none yet)
+### Run 2 (collected 2026-10-10)
+
+Figures are copied from `study/output/findings-run2.md`. Run 2 is a partial run (the
+5,000-file cap, §9) and is disjoint from run 1: the draw left out run 1's 1,147
+repositories. What changed between the runs is in `study/runs.md`. Run 1's figures
+above stand as they are.
+
+| Signal                                   | Build   | Don't build | Run 1        | Run 2                                      | Side (run 2) |
+| ---------------------------------------- | ------- | ----------- | ------------ | ------------------------------------------ | ------------ |
+| Config-class files collected (gate)      | ≥ 1,000 | < 300       | 4,152 dedup  | 4,112 dedup (4,993 raw)                    | build        |
+| Median servers per config                | ≥ 2     | 1           | 1            | 1 (N = 849)                                | don't build  |
+| Unpinned reference rate                  | ≥ 40%   | < 15%       | 91.9%        | 85.6% (N = 500)                            | build        |
+| Configs with credential-shaped env value | ≥ 3%    | < 1%        | 3.9%         | 2.4% (N = 849)                             | between      |
+| Repos with 2+ configs that disagree      | ≥ 20%   | < 5%        | 16.3%        | 14.0% (N = 285)                            | between      |
+| Median config age vs repo age (§10.1)    | staler  | tracks repo | undetermined | median lag 20.5 days, 26.0% > 90 (N = 851) | between      |
+
+**Decision: park** (recorded 2026-10-10 by the owner)
+
+Reasoning: the gate passes, but only one of the five remaining rows lands on the build
+side, fewer than run 1's two. §3 named a second run as the way to check whether run 1's
+two build signals hold. The unpinned rate holds well above its threshold in both runs.
+The credential rate does not: 3.9% in run 1 was just over the 3% line, and 2.4% in run 2
+is under it. The staleness row, scored by §10.1 for the first time, lands between: the
+median lag is under 30 days, but 26.0% of configs lag more than 90 days, just over the
+25% limit. The study does not support building DriftMark as planned.
+
+The unpinned rate is the one finding that both independent runs place far on the build
+side. A narrower follow-up aimed at that gap alone is outside this study's decision and
+would need its own criteria, set before any new data is examined.

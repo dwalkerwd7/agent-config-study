@@ -47,7 +47,7 @@ Which figures can be compared with run N-1 as they stand, and which cannot, and 
 | Collector         | commit `2179f64` (PR #42)                                  |
 | Analysis          | `study/analyze.py` as changed in the PR adding this entry  |
 | Output            | `study/output/findings-run2.md`                            |
-| Decision          | none yet (see results.md)                                  |
+| Decision          | park (results.md §10)                                      |
 
 ### Changed since run 1
 
