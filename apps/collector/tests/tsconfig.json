@@ -8,6 +8,5 @@
     "declarationMap": false,
     "incremental": false
   },
-  "include": ["**/*.ts", "../src/**/*"],
-  "references": [{ "path": "../../../packages/core" }]
+  "include": ["**/*.ts", "../src/**/*"]
 }

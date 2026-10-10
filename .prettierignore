@@ -1,8 +1,5 @@
 node_modules
 dist
-.next
 coverage
 pnpm-lock.yaml
-packages/db/src/generated
-apps/web/next-env.d.ts
 study/output
