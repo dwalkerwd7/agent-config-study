@@ -1,7 +1,7 @@
 # study
 
 Working directories for the corpus study. The write-up lives in
-[results.md](results.md).
+[results.md](results.md), and what changed between collection runs in [runs.md](runs.md).
 
 | Path      | Contents                                                        |
 | --------- | --------------------------------------------------------------- |

@@ -3,7 +3,7 @@ Corpus Study — Results
 Findings from the study pre-registered in study/plan.md, governed by study/rules.md.
 Question IDs (Q1–Q14) and rule IDs refer to those files.
 
-Status: draft · first run collected 2026-10-10 · partial run · owner: Derek Walker
+Status: decided (park) · first run collected 2026-10-10 · partial run · owner: Derek Walker
 
 Every figure here is copied from `study/output/findings-run1.md`, which
 `study/analyze.py` emits from the raw corpus, and none is typed from memory (A-2). That
@@ -67,7 +67,7 @@ collection so the result cannot be reinterpreted.
 
 The first row is a gate. At least three of the remaining five must land on the build side.
 
-**Decision: park (draft, for the owner to confirm)**
+**Decision: park** (recorded 2026-10-10 by the owner)
 
 Reasoning: the gate passes, but only two of the five remaining rows land on the build
 side. The staleness row has no numeric threshold in §2. Plan §10.1 sets one, but it was
