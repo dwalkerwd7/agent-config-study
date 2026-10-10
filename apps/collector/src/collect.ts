@@ -59,6 +59,28 @@ export interface CollectOptions {
   signal?: AbortSignal;
   /** The file cap. Defaults to `FILE_CAP`; tests lower it. */
   fileCap?: number;
+  /**
+   * Repositories an earlier run already collected, left out of the draw so
+   * this run is a disjoint sample (`collect --exclude-from`). Search pages are
+   * still recorded whole; excluded repositories are dropped when the pools
+   * are built. The exclusion is recorded with the seed, and a resumed run
+   * must pass the same one.
+   */
+  exclude?: Exclusion;
+}
+
+export interface Exclusion {
+  /** The runs whose repositories are excluded, by name. */
+  runs: readonly string[];
+  repos: ReadonlySet<string>;
+}
+
+/** Thrown when a resumed run's exclusion differs from the one its corpus was started with. */
+export class ExclusionMismatchError extends Error {
+  constructor() {
+    super('this corpus was started with a different --exclude-from; resume it with the same one');
+    this.name = 'ExclusionMismatchError';
+  }
 }
 
 /**
@@ -146,6 +168,8 @@ async function run(
   const fileCap = options.fileCap ?? FILE_CAP;
   const aborted = (): boolean => options.signal?.aborted === true;
 
+  const exclude = options.exclude ?? { runs: [], repos: new Set<string>() };
+  checkExclusion(deps, exclude);
   const doneFiles = store.completedFiles();
   if (doneFiles.size >= fileCap) return 'file-cap';
 
@@ -197,8 +221,9 @@ async function run(
         );
       }
       if (page === 1) stratum.weight = record.total_count;
-      enqueue(queue, slice.id, record.items);
-      for (const item of record.items) pool.add(item.repo);
+      const kept = record.items.filter((item) => !exclude.repos.has(item.repo));
+      enqueue(queue, slice.id, kept);
+      for (const item of kept) pool.add(item.repo);
       if (isLastPage(record)) break;
     }
   }
@@ -210,7 +235,7 @@ async function run(
   // repository that failed with an API error is retried at its position; if
   // it succeeds this time, the sequence from there on can differ from the
   // run that saw it fail, which contributed no files for it.
-  const seed = samplingSeed(deps, fileCap);
+  const seed = samplingSeed(deps, fileCap, exclude);
   const doneRepos = store.completedRepos();
   const recordedFiles = filesPerRepo(store.fileRefs());
   const filesPerTarget = new Map<TargetPattern, number>();
@@ -267,7 +292,26 @@ async function run(
  * expansion, a fresh random one recorded before anything is expanded. It is
  * not secret and is never derived from the redaction salt.
  */
-function samplingSeed(deps: CollectDeps, fileCap: number): string {
+/**
+ * A corpus keeps the exclusion it was started with: resuming it with another
+ * would draw from different pools and break the replayed sequence. A corpus
+ * with no sampling record yet has drawn nothing, so any exclusion is fine.
+ */
+function checkExclusion(deps: CollectDeps, exclude: Exclusion): void {
+  const first = deps.store.sampling()[0];
+  if (first === undefined) return;
+  const runs = [...exclude.runs].sort();
+  const recorded = [...first.excluded_runs].sort();
+  if (
+    runs.length !== recorded.length ||
+    runs.some((run, i) => run !== recorded[i]) ||
+    exclude.repos.size !== first.excluded_repos
+  ) {
+    throw new ExclusionMismatchError();
+  }
+}
+
+function samplingSeed(deps: CollectDeps, fileCap: number, exclude: Exclusion): string {
   const first = deps.store.sampling()[0];
   if (first !== undefined) {
     deps.logger.info({ seed: first.seed, method: first.method }, 'sampling seed reused');
@@ -279,6 +323,8 @@ function samplingSeed(deps: CollectDeps, fileCap: number): string {
     file_cap: fileCap,
     method: SAMPLING_METHOD,
     created_at: new Date().toISOString(),
+    excluded_runs: [...exclude.runs].sort(),
+    excluded_repos: exclude.repos.size,
   });
   deps.logger.info({ seed, method: SAMPLING_METHOD }, 'sampling seed recorded');
   return seed;

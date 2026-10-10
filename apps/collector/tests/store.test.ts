@@ -70,6 +70,8 @@ const SAMPLING: SamplingRecord = {
   file_cap: 5000,
   method: 'stratified-v1',
   created_at: '2026-09-01T00:00:30.000Z',
+  excluded_runs: ['run1'],
+  excluded_repos: 3,
 };
 
 const FILE: FileRecord = {
@@ -205,6 +207,12 @@ describe('CorpusStore: writing records', () => {
     );
     expect(() => store.appendSampling({ ...SAMPLING, file_cap: 0 })).toThrow(CorpusRecordError);
     expect(() => store.appendSampling({ ...SAMPLING, file_cap: 1.5 })).toThrow(CorpusRecordError);
+    expect(() => store.appendSampling({ ...SAMPLING, excluded_runs: ['../up'] })).toThrow(
+      CorpusRecordError,
+    );
+    expect(() => store.appendSampling({ ...SAMPLING, excluded_repos: -1 })).toThrow(
+      CorpusRecordError,
+    );
     expect(tree(root)).toEqual([]);
   });
 
@@ -239,6 +247,13 @@ describe('CorpusStore: resume readers', () => {
     expect(store.completedRepos()).toEqual(new Map());
     expect(store.fileRefs()).toEqual([]);
     expect(store.sampling()).toEqual([]);
+  });
+
+  it('reads a sampling record written before exclusions existed as excluding nothing', () => {
+    const { excluded_runs: _runs, excluded_repos: _repos, ...legacy } = SAMPLING;
+    const store = new CorpusStore(root);
+    appendFileSync(join(root, 'sampling.jsonl'), `${JSON.stringify(legacy)}\n`);
+    expect(store.sampling()).toEqual([{ ...legacy, excluded_runs: [], excluded_repos: 0 }]);
   });
 
   it('reads completed pages and repos', () => {

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { sha256 } from '@driftmark/core';
 import { RequestError } from 'octokit';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { collect, type CollectOptions } from '../src/collect.js';
+import { ExclusionMismatchError, collect, type CollectOptions } from '../src/collect.js';
 import { UsageError, runCli } from '../src/cli.js';
 import type {
   CodeSearchItem,
@@ -206,6 +206,8 @@ function seedStore(seed: string, at = root): void {
     file_cap: 5000,
     method: 'stratified-v1',
     created_at: '2026-09-01T00:00:00.000Z',
+    excluded_runs: [],
+    excluded_repos: 0,
   });
 }
 
@@ -771,6 +773,8 @@ describe('collect: sampling seed and resume', () => {
       file_cap: 20,
       method: 'stratified-v1',
       created_at: expect.any(String) as unknown,
+      excluded_runs: [],
+      excluded_repos: 0,
     });
 
     // Resumed twice more, the seed is read back rather than drawn again, and
@@ -814,6 +818,35 @@ describe('collect: sampling seed and resume', () => {
 
     expect(corpusState(root)).toEqual(corpusState(whole));
     expect(records('sampling')).toEqual(records('sampling', whole));
+  });
+});
+
+describe('collect: excluding an earlier run', () => {
+  it('never expands an excluded repository and records the exclusion with the seed', async () => {
+    const github = world();
+    const result = await run(github, {
+      exclude: { runs: ['run1'], repos: new Set(['octo/demo']) },
+    });
+
+    expect(result).toMatchObject({ status: 'complete', repos_expanded: 1 });
+    expect(github.calls).not.toContain('repo octo/demo');
+    expect(records('repos').map((record) => record['full_name'])).toEqual(['acme/tools']);
+    // The search page is still recorded whole (C-3).
+    expect(records('responses')[0]?.['items']).toHaveLength(2);
+    expect(records('sampling')[0]).toMatchObject({ excluded_runs: ['run1'], excluded_repos: 1 });
+  });
+
+  it('refuses to resume a corpus with a different exclusion', async () => {
+    const github = world();
+    await run(github, { maxRepos: 1, exclude: { runs: ['run1'], repos: new Set(['x/y']) } });
+
+    await expect(run(github)).rejects.toThrow(ExclusionMismatchError);
+    await expect(
+      run(github, { exclude: { runs: ['run1'], repos: new Set(['x/y', 'z/w']) } }),
+    ).rejects.toThrow(ExclusionMismatchError);
+    expect(
+      await run(github, { exclude: { runs: ['run1'], repos: new Set(['x/y']) } }),
+    ).toMatchObject({ status: 'complete' });
   });
 });
 
@@ -933,7 +966,46 @@ describe('cli', () => {
     expect(result).toMatchObject({ status: 'partial', stop_reason: 'max-repos' });
   });
 
+  it('--run writes the corpus under its own directory', async () => {
+    const github = world();
+    await runCli(['--run', 'run2'], cliDeps(github, []));
+
+    expect(records('runs', join(root, 'run2'))).toHaveLength(1);
+    expect(existsSync(join(root, 'runs.jsonl'))).toBe(false);
+  });
+
+  it('--exclude-from leaves out every repository the named run collected', async () => {
+    const github = world();
+    await runCli(['--run', 'run1', '--max-repos', '1'], cliDeps(github, []));
+    const first = records('repos', join(root, 'run1')).map((record) => record['full_name']);
+    expect(first).toHaveLength(1);
+
+    github.calls.length = 0;
+    await runCli(['--run', 'run2', '--exclude-from', 'run1'], cliDeps(github, []));
+
+    const second = records('repos', join(root, 'run2')).map((record) => record['full_name']);
+    expect(second).toHaveLength(1);
+    expect(second).not.toContain(first[0]);
+    expect(records('sampling', join(root, 'run2'))[0]).toMatchObject({
+      excluded_runs: ['run1'],
+      excluded_repos: 1,
+    });
+  });
+
+  it('rejects --exclude-from naming a run that was never collected', async () => {
+    const github = world();
+    await expect(
+      runCli(['--run', 'run2', '--exclude-from', 'run1'], cliDeps(github, [])),
+    ).rejects.toThrow(UsageError);
+    expect(github.calls).toEqual([]);
+  });
+
   it.each([
+    ['--run', '../escape'],
+    ['--run', 'Run1'],
+    ['--run', ''],
+    ['--exclude-from', '..'],
+    ['--run', 'run1', '--exclude-from', 'run1'],
     ['--max-repos', '0'],
     ['--max-repos', '-1'],
     ['--max-repos', 'ten'],

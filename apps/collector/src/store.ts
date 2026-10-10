@@ -115,6 +115,14 @@ export interface SamplingRecord {
   file_cap: number;
   method: 'stratified-v1';
   created_at: string;
+  /**
+   * Earlier runs whose repositories this corpus leaves out of the draw, and
+   * how many repositories that was. Empty and 0 for a corpus that excludes
+   * nothing, which is also what a record written before the field existed
+   * reads as.
+   */
+  excluded_runs: string[];
+  excluded_repos: number;
 }
 
 /** The fields of a file record that identify it: what resume and the draw replay need. */
@@ -161,6 +169,8 @@ export class CorpusReadError extends Error {
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
 /** 32 bytes as lower-case hex: the same shape as a SHA-256 digest. */
 const HEX_SEED = HEX_SHA256;
+/** A run's name: its directory under the corpus root (`collect --run`). */
+export const RUN_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
 export class CorpusStore {
   readonly #root: string;
@@ -219,11 +229,19 @@ export class CorpusStore {
     if (!Number.isSafeInteger(record.file_cap) || record.file_cap < 1) {
       throw new CorpusRecordError('file_cap');
     }
+    if (!record.excluded_runs.every((run) => RUN_NAME.test(run))) {
+      throw new CorpusRecordError('excluded_runs');
+    }
+    if (!Number.isSafeInteger(record.excluded_repos) || record.excluded_repos < 0) {
+      throw new CorpusRecordError('excluded_repos');
+    }
     this.#append('sampling', {
       seed: record.seed,
       file_cap: record.file_cap,
       method: record.method,
       created_at: record.created_at,
+      excluded_runs: [...record.excluded_runs],
+      excluded_repos: record.excluded_repos,
     });
   }
 
@@ -376,17 +394,29 @@ export class CorpusStore {
       const fileCap = field(value, 'file_cap');
       const method = field(value, 'method');
       const createdAt = field(value, 'created_at');
+      const excludedRuns = field(value, 'excluded_runs') ?? [];
+      const excludedRepos = field(value, 'excluded_repos') ?? 0;
       if (
         typeof seed !== 'string' ||
         !HEX_SEED.test(seed) ||
         !isInteger(fileCap) ||
         // Another method's sequence cannot be reproduced by this code.
         method !== 'stratified-v1' ||
-        typeof createdAt !== 'string'
+        typeof createdAt !== 'string' ||
+        !Array.isArray(excludedRuns) ||
+        !excludedRuns.every((run) => typeof run === 'string' && RUN_NAME.test(run)) ||
+        !isInteger(excludedRepos)
       ) {
         throw new CorpusReadError('sampling', line);
       }
-      return { seed, file_cap: fileCap, method, created_at: createdAt };
+      return {
+        seed,
+        file_cap: fileCap,
+        method,
+        created_at: createdAt,
+        excluded_runs: excludedRuns as string[],
+        excluded_repos: excludedRepos,
+      };
     });
   }
 
