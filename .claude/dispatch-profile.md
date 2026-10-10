@@ -1,4 +1,4 @@
-# Dispatch profile — driftmark
+# Dispatch profile — agent-config-study
 
 Read by the machine-global `dispatcher` agent. It carries the conventions
 specific to this repo, so they hold no matter who writes the dispatcher's
@@ -37,7 +37,7 @@ The full gate takes about a minute. That's cheap, but semgrep dominates it, so
 iterate with:
 
 ```bash
-pnpm --filter @driftmark/<pkg> typecheck
+pnpm --filter @agent-config-study/<pkg> typecheck
 pnpm exec vitest run apps/<pkg>/tests/<file>.test.ts
 pnpm exec eslint apps/<pkg>
 pnpm exec prettier --write <files>
@@ -60,7 +60,7 @@ and run `verify.sh` before review, once per review round, and at PR time.
   the source. `vitest.config.ts` only collects `*/tests/**/*.test.ts`. A test
   anywhere else never runs, so it passes CI.
 - **The Prisma client is generated and gitignored.** `worktree-setup.sh` runs
-  `pnpm db:generate`. A package that imports `@driftmark/db` fails to typecheck
+  `pnpm db:generate`. A package that imports `@agent-config-study/db` fails to typecheck
   without it.
 
 ## Collector builds (`apps/collector`)

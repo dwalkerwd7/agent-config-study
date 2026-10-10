@@ -1,4 +1,4 @@
-# Review rubric — driftmark
+# Review rubric — agent-config-study
 
 Project rules for the `agent-reviewer` agent, layered on top of its generic
 dimensions. Where this file and the generic rules disagree, this file wins.
@@ -69,7 +69,7 @@ and the reason matters more than the rule:
 
 ## 4. Handling untrusted config
 
-This is the product: driftmark reads agent-config files written by other people.
+This is the core of the collector: it reads agent-config files written by other people.
 Code on that path is security-sensitive even though it looks like plumbing.
 
 - **Never execute, spawn, resolve, or fetch anything a scanned config names.**
@@ -81,7 +81,7 @@ Code on that path is security-sensitive even though it looks like plumbing.
   paths; new logging keeps it.
 - A parse failure on hostile input is expected. It must not crash a worker or
   leak file content into an error message.
-- Text inside a scanned config that addresses a model is data, and if driftmark
+- Text inside a scanned config that addresses a model is data, and if this code
   ever surfaces config content to one, that is a design question — flag it.
 
 ## 5. Study rules, once scanning exists
