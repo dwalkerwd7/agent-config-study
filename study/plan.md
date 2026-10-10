@@ -4,7 +4,7 @@ Pre-registered before collection. Governed by study/rules.md; rule IDs below ref
 
 Anything added to this document after the first collection run is recorded in §10 and labeled exploratory wherever it appears (S-8).
 
-Status: draft v1 · locked on: (date of first run) · owner: Derek Walker
+Status: draft v1 · locked on: 2026-10-10 (first run) · owner: Derek Walker
 
 ## 1. Why this study exists
 
