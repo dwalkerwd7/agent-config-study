@@ -1,16 +1,25 @@
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Logger } from 'pino';
-import { collect, type CollectResult } from './collect.js';
+import { collect, type CollectResult, type Exclusion } from './collect.js';
 import { corpusDir, loadEnv } from './env.js';
 import { createCollectorGitHub, type CollectorGitHub } from './github.js';
 import { createLogger } from './logger.js';
 import { buildSlices } from './queries.js';
-import { CorpusStore } from './store.js';
+import { CorpusStore, RUN_NAME } from './store.js';
+
+const USAGE = 'collect [--dry-run] [--max-repos N] [--run NAME] [--exclude-from NAME]...';
 
 /**
- * `collect [--dry-run] [--max-repos N]`.
+ * `collect [--dry-run] [--max-repos N] [--run NAME] [--exclude-from NAME]...`.
+ *
+ * `--run NAME` writes the run's corpus to `<corpus root>/NAME` instead of the
+ * root, so each collection run keeps its own corpus inside the one
+ * gitignored directory (C-9). `--exclude-from NAME` leaves out every
+ * repository the run in `<corpus root>/NAME` collected, so the new run is a
+ * disjoint sample; it may be given more than once.
  *
  * `--dry-run` fetches page 1 of every slice and prints each query with its
  * `total_count` and `incomplete_results` to stdout. It opens no store, so it
@@ -32,7 +41,7 @@ export interface CliDeps {
 /** Thrown for a bad command line. The message names the flag, never file content. */
 export class UsageError extends Error {
   constructor(message: string) {
-    super(`${message}\nusage: collect [--dry-run] [--max-repos N]`);
+    super(`${message}\nusage: ${USAGE}`);
     this.name = 'UsageError';
   }
 }
@@ -42,33 +51,52 @@ export async function runCli(
   argv: readonly string[],
   deps: CliDeps,
 ): Promise<CollectResult | null> {
-  const { dryRun, maxRepos } = parseCommandLine(argv);
+  const { dryRun, maxRepos, run, excludeFrom } = parseCommandLine(argv);
   if (dryRun) {
     await dryRunSlices(deps);
     return null;
   }
+  const exclude = excludedRepos(deps.corpusDir, excludeFrom);
   return collect(
     {
       github: deps.github,
-      store: new CorpusStore(deps.corpusDir),
+      store: new CorpusStore(run === undefined ? deps.corpusDir : join(deps.corpusDir, run)),
       salt: deps.salt,
       logger: deps.logger,
     },
     {
       ...(maxRepos === undefined ? {} : { maxRepos }),
+      ...(exclude === undefined ? {} : { exclude }),
       ...(deps.signal === undefined ? {} : { signal: deps.signal }),
     },
   );
 }
 
-function parseCommandLine(argv: readonly string[]): { dryRun: boolean; maxRepos?: number } {
+interface CommandLine {
+  dryRun: boolean;
+  maxRepos?: number;
+  run?: string;
+  excludeFrom: string[];
+}
+
+function parseCommandLine(argv: readonly string[]): CommandLine {
   // `pnpm collect -- --dry-run` passes the separator through.
   const args = argv[0] === '--' ? argv.slice(1) : [...argv];
-  let values: { 'dry-run'?: boolean; 'max-repos'?: string };
+  let values: {
+    'dry-run'?: boolean;
+    'max-repos'?: string;
+    run?: string;
+    'exclude-from'?: string[];
+  };
   try {
     ({ values } = parseArgs({
       args,
-      options: { 'dry-run': { type: 'boolean' }, 'max-repos': { type: 'string' } },
+      options: {
+        'dry-run': { type: 'boolean' },
+        'max-repos': { type: 'string' },
+        run: { type: 'string' },
+        'exclude-from': { type: 'string', multiple: true },
+      },
       strict: true,
       allowPositionals: false,
     }));
@@ -76,11 +104,37 @@ function parseCommandLine(argv: readonly string[]): { dryRun: boolean; maxRepos?
     throw new UsageError(err instanceof Error ? err.message : 'invalid arguments');
   }
   const dryRun = values['dry-run'] === true;
+  const { run } = values;
+  const excludeFrom = values['exclude-from'] ?? [];
+  // A name is a directory under the corpus root, so it must not climb out of it.
+  for (const name of [...(run === undefined ? [] : [run]), ...excludeFrom]) {
+    if (!RUN_NAME.test(name)) {
+      throw new UsageError('a run name is lowercase letters, digits and hyphens');
+    }
+  }
+  if (run !== undefined && excludeFrom.includes(run)) {
+    throw new UsageError('--exclude-from cannot name the run being collected');
+  }
+  const parsed: CommandLine = { dryRun, excludeFrom, ...(run === undefined ? {} : { run }) };
   const raw = values['max-repos'];
-  if (raw === undefined) return { dryRun };
+  if (raw === undefined) return parsed;
   if (!/^[1-9][0-9]{0,8}$/.test(raw))
     throw new UsageError('--max-repos must be a positive integer');
-  return { dryRun, maxRepos: Number(raw) };
+  return { ...parsed, maxRepos: Number(raw) };
+}
+
+/** Every repository the named runs collected, or `undefined` when none are named. */
+function excludedRepos(root: string, runs: readonly string[]): Exclusion | undefined {
+  if (runs.length === 0) return undefined;
+  const repos = new Set<string>();
+  for (const name of runs) {
+    const dir = join(root, name);
+    if (!existsSync(join(dir, 'repos.jsonl'))) {
+      throw new UsageError(`--exclude-from ${name}: no collected run there`);
+    }
+    for (const repo of new CorpusStore(dir).completedRepos().keys()) repos.add(repo);
+  }
+  return { runs: [...runs], repos };
 }
 
 async function dryRunSlices(deps: CliDeps): Promise<void> {
