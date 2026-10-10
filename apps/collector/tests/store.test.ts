@@ -250,7 +250,12 @@ describe('CorpusStore: resume readers', () => {
   });
 
   it('reads a sampling record written before exclusions existed as excluding nothing', () => {
-    const { excluded_runs: _runs, excluded_repos: _repos, ...legacy } = SAMPLING;
+    const legacy = {
+      seed: SAMPLING.seed,
+      file_cap: SAMPLING.file_cap,
+      method: SAMPLING.method,
+      created_at: SAMPLING.created_at,
+    };
     const store = new CorpusStore(root);
     appendFileSync(join(root, 'sampling.jsonl'), `${JSON.stringify(legacy)}\n`);
     expect(store.sampling()).toEqual([{ ...legacy, excluded_runs: [], excluded_repos: 0 }]);
