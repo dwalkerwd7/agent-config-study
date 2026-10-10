@@ -18,8 +18,11 @@ concurrency:
 
 jobs:
   # The same gate the builder agent runs locally: prettier, eslint, tsc,
-  # vitest, and semgrep/gitleaks over what the change touched.
+  # vitest, and semgrep/gitleaks over what the change touched. Runs only once
+  # the security scans pass; when they fail it is skipped, and the failed
+  # `security` check still blocks the merge.
   verify:
+    needs: security
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
