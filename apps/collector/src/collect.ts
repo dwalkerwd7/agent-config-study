@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { sha256 } from '@driftmark/core';
 import type { Logger } from 'pino';
 import {
@@ -9,10 +9,12 @@ import {
 } from './github.js';
 import { buildSlices } from './queries.js';
 import { redact } from './redact.js';
+import { SAMPLING_METHOD, StratifiedDraw, type Stratum, type TargetPattern } from './sampling.js';
 import {
   CorpusPathError,
   fileKey,
   type CorpusStore,
+  type FileRef,
   type ResponseRecord,
   type SearchHit,
 } from './store.js';
@@ -20,9 +22,10 @@ import { matchTarget, type TargetMatch } from './targets.js';
 
 /**
  * The two-phase collect loop. Discover runs every code-search slice and queues
- * the public, non-fork repositories it finds; Expand reads each queued
- * repository's tree at its default-branch head and collects every target path
- * in it. Everything written goes through the store, redacted first (C-1).
+ * the public, non-fork repositories it finds; Expand draws queued repositories
+ * in the seeded, stratified order of `sampling.ts`, reads each one's tree at
+ * its default-branch head and collects every target path in it. Everything
+ * written goes through the store, redacted first (C-1).
  *
  * Nothing a collected file names is fetched, spawned or resolved (rubric §4):
  * every request is built from a slice query, or a repository name, branch,
@@ -46,7 +49,11 @@ export interface CollectDeps {
 }
 
 export interface CollectOptions {
-  /** Stop after this many repositories have been expanded in this run. */
+  /**
+   * Stop after this many repositories have been attempted in this run. A
+   * repository an earlier run completed is replayed, not attempted, so it
+   * does not count.
+   */
   maxRepos?: number;
   /** Aborted by SIGINT. The run stops between requests and is labelled partial. */
   signal?: AbortSignal;
@@ -55,10 +62,10 @@ export interface CollectOptions {
 }
 
 /**
- * Why a run stopped. Only `exhausted` is a complete run; every other reason is
- * partial (C-8). `repo-errors` means every slice and repository was reached
- * but at least one repository failed with an API error, so it is retried on
- * the next run rather than counted as done.
+ * Why a run stopped. Only `exhausted` (every stratum's pool drawn empty) is a
+ * complete run; every other reason is partial (C-8). `repo-errors` means every
+ * slice and repository was reached but at least one repository failed with an
+ * API error, so it is retried on the next run rather than counted as done.
  */
 export type StopReason =
   'exhausted' | 'file-cap' | 'max-repos' | 'aborted' | 'repo-errors' | 'error';
@@ -151,7 +158,11 @@ async function run(
     recorded.set(record.slice_id, pages);
   }
   const queue = new Map<string, Queued>();
+  const strata: Stratum[] = [];
   for (const slice of buildSlices()) {
+    const pool = new Set<string>();
+    const stratum: Stratum = { sliceId: slice.id, target: slice.target.pattern, weight: 0, pool };
+    strata.push(stratum);
     for (let page = 1; page <= MAX_PAGES; page++) {
       let record = recorded.get(slice.id)?.get(page);
       if (record === undefined) {
@@ -185,23 +196,43 @@ async function run(
           'search page recorded',
         );
       }
+      if (page === 1) stratum.weight = record.total_count;
       enqueue(queue, slice.id, record.items);
+      for (const item of record.items) pool.add(item.repo);
       if (isLastPage(record)) break;
     }
   }
 
-  // Expand.
+  // Expand, in draw order. The draw is rerun from the start every run: a
+  // repository an earlier run completed is replayed from its recorded files,
+  // with no request, so the per-target counts the draw balances on, and with
+  // them the sequence, come out the same as in an uninterrupted run. A
+  // repository that failed with an API error is retried at its position; if
+  // it succeeds this time, the sequence from there on can differ from the
+  // run that saw it fail, which contributed no files for it.
+  const seed = samplingSeed(deps, fileCap);
   const doneRepos = store.completedRepos();
+  const recordedFiles = filesPerRepo(store.fileRefs());
+  const filesPerTarget = new Map<TargetPattern, number>();
+  const draw = new StratifiedDraw(strata, seed);
   let attempted = 0;
-  for (const [fullName, queued] of queue) {
-    if (doneRepos.has(fullName)) continue;
+  for (let next = draw.next(filesPerTarget); next !== null; next = draw.next(filesPerTarget)) {
+    const { repo: fullName, sliceId } = next;
+    const head = doneRepos.get(fullName);
+    if (head !== undefined) {
+      addCounts(filesPerTarget, recordedFiles.get(repoAt(fullName, head)));
+      continue;
+    }
     if (aborted()) return 'aborted';
     if (doneFiles.size >= fileCap) return 'file-cap';
     if (options.maxRepos !== undefined && attempted >= options.maxRepos) return 'max-repos';
+    const queued = queue.get(fullName);
+    // Unreachable: every pool is built from the same items as the queue.
+    if (queued === undefined) throw new Error('drawn repository was never queued');
     attempted++;
     let outcome: RepoOutcome;
     try {
-      outcome = await expandRepo(deps, fullName, queued, {
+      outcome = await expandRepo(deps, fullName, queued, sliceId, {
         doneFiles,
         fileCap,
         aborted,
@@ -218,11 +249,70 @@ async function run(
       logger.warn({ repo: fullName, status }, 'repo expansion failed; retried next run');
       continue;
     }
-    if (outcome === 'aborted' || outcome === 'file-cap') return outcome;
-    if (outcome === 'skipped') counts.repos_skipped++;
-    else counts.repos_expanded++;
+    if (outcome.status === 'done') {
+      counts.repos_expanded++;
+      addCounts(filesPerTarget, outcome.files);
+    } else if (outcome.status === 'skipped') {
+      // A private or fork repository contributes no files.
+      counts.repos_skipped++;
+    } else {
+      return outcome.status;
+    }
   }
   return counts.repos_failed > 0 ? 'repo-errors' : 'exhausted';
+}
+
+/**
+ * The draw's seed: the first sampling record's, or, on the first run to reach
+ * expansion, a fresh random one recorded before anything is expanded. It is
+ * not secret and is never derived from the redaction salt.
+ */
+function samplingSeed(deps: CollectDeps, fileCap: number): string {
+  const first = deps.store.sampling()[0];
+  if (first !== undefined) {
+    deps.logger.info({ seed: first.seed, method: first.method }, 'sampling seed reused');
+    return first.seed;
+  }
+  const seed = randomBytes(32).toString('hex');
+  deps.store.appendSampling({
+    seed,
+    file_cap: fileCap,
+    method: SAMPLING_METHOD,
+    created_at: new Date().toISOString(),
+  });
+  deps.logger.info({ seed, method: SAMPLING_METHOD }, 'sampling seed recorded');
+  return seed;
+}
+
+/** A number of files per target. */
+type TargetCounts = Map<TargetPattern, number>;
+
+/** One repository at one commit, as `filesPerRepo` keys it. */
+function repoAt(repo: string, commitSha: string): string {
+  return `${repo}@${commitSha}`;
+}
+
+/**
+ * Recorded files per target for each repository at each commit. A repository
+ * stopped mid-way and resumed at a newer head has files at both commits; only
+ * those at the head it completed at are replayed.
+ */
+function filesPerRepo(refs: readonly FileRef[]): Map<string, TargetCounts> {
+  const perRepo = new Map<string, TargetCounts>();
+  for (const ref of refs) {
+    // Every recorded path matched a target when it was collected.
+    const match = matchTarget(ref.path);
+    if (match === null) continue;
+    const key = repoAt(ref.repo, ref.commit_sha);
+    const counts = perRepo.get(key) ?? new Map<TargetPattern, number>();
+    counts.set(match.target, (counts.get(match.target) ?? 0) + 1);
+    perRepo.set(key, counts);
+  }
+  return perRepo;
+}
+
+function addCounts(total: TargetCounts, add: ReadonlyMap<TargetPattern, number> | undefined): void {
+  for (const [target, count] of add ?? []) total.set(target, (total.get(target) ?? 0) + count);
 }
 
 /** The last page of a slice: the page cap, a short page, or the end of `total_count`. */
@@ -245,7 +335,9 @@ function enqueue(queue: Map<string, Queued>, sliceId: string, items: SearchHit[]
   }
 }
 
-type RepoOutcome = 'done' | 'skipped' | 'aborted' | 'file-cap';
+/** `done` carries the files the repository holds at its head, per target. */
+type RepoOutcome =
+  { status: 'done'; files: TargetCounts } | { status: 'skipped' | 'aborted' | 'file-cap' };
 
 interface ExpandState {
   /** Files already recorded, by `fileKey`. Grows as this run records more. */
@@ -265,13 +357,14 @@ async function expandRepo(
   deps: CollectDeps,
   fullName: string,
   queued: Queued,
+  drawnSlice: string,
   state: ExpandState,
 ): Promise<RepoOutcome> {
   const { github, store, logger } = deps;
   const [owner, name, ...rest] = fullName.split('/');
   if (!owner || !name || rest.length > 0) {
     logger.warn('repo skipped: full name is not owner/name');
-    return 'skipped';
+    return { status: 'skipped' };
   }
 
   const meta = await github.getRepo(owner, name);
@@ -279,7 +372,7 @@ async function expandRepo(
     // Nothing from a private repository is kept (P-14), its name included,
     // and forks are excluded (C-6). Neither is recorded, so nothing is written.
     logger.info({ reason: meta.private ? 'private' : 'fork' }, 'repo skipped');
-    return 'skipped';
+    return { status: 'skipped' };
   }
 
   const head = await github.getHeadCommit(owner, name, meta.default_branch);
@@ -294,15 +387,25 @@ async function expandRepo(
 
   let files = 0;
   let redactions = 0;
+  // Every file recorded at this head, including any an interrupted run
+  // recorded, which is what a later run replays from files.jsonl.
+  const perTarget: TargetCounts = new Map();
+  const tally = (match: TargetMatch): void => {
+    perTarget.set(match.target, (perTarget.get(match.target) ?? 0) + 1);
+  };
   for (const { entry, match } of targets) {
     const key = fileKey(fullName, head.sha, entry.path);
-    if (state.doneFiles.has(key)) continue;
-    if (state.aborted()) return 'aborted';
-    if (state.doneFiles.size >= state.fileCap) return 'file-cap';
+    if (state.doneFiles.has(key)) {
+      tally(match);
+      continue;
+    }
+    if (state.aborted()) return { status: 'aborted' };
+    if (state.doneFiles.size >= state.fileCap) return { status: 'file-cap' };
     const hits = await collectFile(deps, { owner, name, fullName }, head.sha, entry, match, queued);
     if (hits === null) continue;
     state.doneFiles.add(key);
     state.counts.files_written++;
+    tally(match);
     files++;
     redactions += hits;
   }
@@ -316,12 +419,13 @@ async function expandRepo(
     head_commit: head.sha,
     tree_truncated: tree.truncated,
     slice_ids: [...queued.sliceIds].sort(),
+    drawn_slice: drawnSlice,
   });
   logger.info(
-    { repo: fullName, files, redactions, tree_truncated: tree.truncated },
+    { repo: fullName, slice: drawnSlice, files, redactions, tree_truncated: tree.truncated },
     'repo expanded',
   );
-  return 'done';
+  return { status: 'done', files: perTarget };
 }
 
 // Fatal, so malformed input is refused rather than silently replaced, and
