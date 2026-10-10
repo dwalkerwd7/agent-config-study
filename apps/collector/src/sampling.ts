@@ -1,4 +1,4 @@
-import { sha256 } from '@driftmark/core';
+import { sha256 } from '@agent-config-study/core';
 import { TARGETS, type Target } from './targets.js';
 
 /**

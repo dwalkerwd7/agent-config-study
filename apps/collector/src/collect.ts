@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { sha256 } from '@driftmark/core';
+import { sha256 } from '@agent-config-study/core';
 import type { Logger } from 'pino';
 import {
   SEARCH_PAGE_SIZE,

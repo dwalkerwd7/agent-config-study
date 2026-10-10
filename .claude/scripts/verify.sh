@@ -46,7 +46,7 @@ pnpm lint || exit 1
 
 if [ "$code" = true ]; then
   # The Prisma client is generated into packages/db/src/generated (gitignored),
-  # and every package that imports @driftmark/db fails to typecheck without it.
+  # and every package that imports @agent-config-study/db fails to typecheck without it.
   # Regenerate when it is missing or the schema changed.
   if [ ! -d packages/db/src/generated ] || echo "$files" | grep -q '^packages/db/prisma/'; then
     pnpm db:generate || exit 1

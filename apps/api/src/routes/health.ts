@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma } from '@driftmark/db';
+import { prisma } from '@agent-config-study/db';
 import { sharedRedis } from '../queue/connection.js';
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {

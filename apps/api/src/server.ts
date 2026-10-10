@@ -1,4 +1,4 @@
-import { prisma } from '@driftmark/db';
+import { prisma } from '@agent-config-study/db';
 import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 import { logger } from './logger.js';

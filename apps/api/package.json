@@ -1,5 +1,5 @@
 {
-  "name": "@driftmark/api",
+  "name": "@agent-config-study/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@driftmark/core": "workspace:*",
-    "@driftmark/db": "workspace:*",
+    "@agent-config-study/core": "workspace:*",
+    "@agent-config-study/db": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.0",
     "bullmq": "^6.3.9",
     "fastify": "^5.12.5",
