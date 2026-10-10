@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sha256 } from '@agent-config-study/core';
+import { sha256 } from '../src/hash.js';
 import { RequestError } from 'octokit';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ExclusionMismatchError, collect, type CollectOptions } from '../src/collect.js';

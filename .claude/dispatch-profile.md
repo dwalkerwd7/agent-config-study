@@ -56,12 +56,8 @@ and run `verify.sh` before review, once per review round, and at PR time.
 - **Fake credentials in tests.** gitleaks scans every change. A fixture that
   must look like a credential needs a `.gitleaksignore` entry with a comment.
   Never weaken the scan config.
-- **Tests go in `apps/<pkg>/tests/` or `packages/<pkg>/tests/`,** never next to
-  the source. `vitest.config.ts` only collects `*/tests/**/*.test.ts`. A test
+- **Tests go in `apps/<pkg>/tests/`,** never next to the source. `vitest.config.ts` only collects `*/tests/**/*.test.ts`. A test
   anywhere else never runs, so it passes CI.
-- **The Prisma client is generated and gitignored.** `worktree-setup.sh` runs
-  `pnpm db:generate`. A package that imports `@agent-config-study/db` fails to typecheck
-  without it.
 
 ## Collector builds (`apps/collector`)
 

@@ -79,9 +79,6 @@ not how common each file type is.
 | [apps/collector/](apps/collector/)   | The collector (TypeScript)                                  |
 | `study/corpus/`                      | Raw collected files. Gitignored and never published         |
 
-The other directories under `apps/` and `packages/` are an unused application scaffold and
-play no part in the study.
-
 ## Reproducing
 
 Requires Node 22+, pnpm 11+ and Python 3.11+.

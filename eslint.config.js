@@ -2,22 +2,12 @@
 // cannot: floating promises, unsafe `any` flow, misused async callbacks.
 // Formatting belongs to prettier, not here.
 import js from '@eslint/js';
-import nextPlugin from '@next/eslint-plugin-next';
-import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/.next/**',
-      '**/coverage/**',
-      'packages/db/src/generated/**',
-      'apps/web/next-env.d.ts',
-      'study/**',
-    ],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'study/**'],
   },
 
   js.configs.recommended,
@@ -41,7 +31,7 @@ export default tseslint.config(
       'no-implied-eval': 'off',
       '@typescript-eslint/no-implied-eval': 'error',
       'no-new-func': 'error',
-      // Fastify plugins, route handlers and BullMQ processors are async by
+      // Callbacks passed where an async function is expected are async by
       // contract; an await-free one is correct, not a smell.
       '@typescript-eslint/require-await': 'off',
     },
@@ -51,16 +41,5 @@ export default tseslint.config(
     // Build and tool config: outside every tsconfig, so lint it untyped.
     files: ['**/*.js', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
-  },
-
-  {
-    files: ['apps/web/**/*.{ts,tsx}'],
-    plugins: { '@next/next': nextPlugin, 'react-hooks': reactHooks },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs['core-web-vitals'].rules,
-      ...reactHooks.configs.recommended.rules,
-    },
-    settings: { next: { rootDir: 'apps/web' } },
   },
 );
